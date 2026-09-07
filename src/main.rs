@@ -2,7 +2,7 @@ mod speaker;
 
 use std::process::ExitCode;
 
-use esp_idf_svc::hal::{delay::FreeRtos, peripherals::Peripherals};
+use esp_idf_svc::hal::peripherals::Peripherals;
 
 fn main() -> ExitCode {
     esp_idf_svc::sys::link_patches();
@@ -18,18 +18,10 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     };
 
-    for _ in 0..10 {
-        let Ok(_) = speaker.volume(100) else {
-            log::error!("Failed to set volume to 100%");
-            return ExitCode::FAILURE;
-        };
-        FreeRtos::delay_ms(250);
-        let Ok(_) = speaker.volume(0) else {
-            log::error!("Failed to set volume to 0%");
-            return ExitCode::FAILURE;
-        };
-        FreeRtos::delay_ms(250);
-    }
+    let Ok(_) = speaker.alarm(None) else {
+        log::error!("Failed to make alarm sound");
+        return ExitCode::FAILURE;
+    };
 
     ExitCode::SUCCESS
 }

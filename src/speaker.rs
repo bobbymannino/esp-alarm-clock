@@ -1,5 +1,8 @@
+use std::time::{Duration, Instant};
+
 use anyhow::Result;
 use esp_idf_svc::hal::{
+    delay::FreeRtos,
     gpio::OutputPin,
     ledc::{LedcChannel, LedcDriver, LedcTimer, LedcTimerDriver, SpeedMode, config::TimerConfig},
     units::Hertz,
@@ -40,6 +43,28 @@ impl<'d, S: SpeedMode> Speaker<'d, S> {
         let percent = u32::from(percent.min(100));
 
         self.channel.set_duty(self.full_duty * percent / 100)?;
+
+        Ok(())
+    }
+
+    /// Make an alarm sound for a specified amount of time.
+    ///
+    /// # Arguments
+    ///
+    /// * `duration` - How long to keep beeping for; defaults to 5 minutes.
+    pub fn alarm(&mut self, duration: Option<Duration>) -> Result<()> {
+        const BEEP_MS: u32 = 250;
+        const GAP_MS: u32 = 250;
+
+        let duration = duration.unwrap_or(Duration::from_mins(5));
+        let start = Instant::now();
+
+        while start.elapsed() < duration {
+            self.volume(100)?;
+            FreeRtos::delay_ms(BEEP_MS);
+            self.volume(0)?;
+            FreeRtos::delay_ms(GAP_MS);
+        }
 
         Ok(())
     }
