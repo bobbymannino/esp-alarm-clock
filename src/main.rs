@@ -16,30 +16,16 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     };
 
-    let frequency = Hertz::from(440);
-    let timer = LedcTimerDriver::new(peripherals.ledc.timer0, &TimerConfig::new().frequency(frequency)).unwrap();
+    let timer = LedcTimerDriver::new(peripherals.ledc.timer0, &TimerConfig::new().frequency(Hertz::from(2_000))).unwrap();
+    let mut channel = LedcDriver::new(peripherals.ledc.channel0, &timer, peripherals.pins.gpio17).unwrap();
+    let duty = channel.get_max_duty() / 2;
 
-    let mut channel = LedcDriver::new(peripherals.ledc.channel0, timer, peripherals.pins.gpio17).unwrap();
-
-    let steps = 10;
-    let max_duty = channel.get_max_duty();
-    let duty_step = max_duty / 10;
-    let mut duty: u32 = duty_step;
-
-    for _ in 0..steps {
+    for _ in 0..10 {
         channel.set_duty(duty).unwrap();
-        log::info!("beep");
-        FreeRtos::delay_ms(500);
-
+        FreeRtos::delay_ms(250);
         channel.set_duty(0).unwrap();
-        duty += duty_step;
-        FreeRtos::delay_ms(500);
+        FreeRtos::delay_ms(250);
     }
-
-    channel.set_duty(max_duty).unwrap();
-    FreeRtos::delay_ms(500);
-    channel.set_duty(duty_step).unwrap();
-    FreeRtos::delay_ms(500);
 
     ExitCode::SUCCESS
 }
