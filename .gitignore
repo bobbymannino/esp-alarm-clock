@@ -1,0 +1,5 @@
+target/
+.embuild/
+
+# Mac
+.DS_Store

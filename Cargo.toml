@@ -1,0 +1,22 @@
+[package]
+name = "esp-alarm-clock"
+version = "0.1.0"
+edition = "2021"
+resolver = "2"
+
+[[bin]]
+name = "esp-alarm-clock"
+harness = false
+
+[profile.dev]
+opt-level = "z"
+
+[profile.release]
+opt-level = "s"
+
+[dependencies]
+log = "0.4"
+esp-idf-svc = "0.51"
+
+[build-dependencies]
+embuild = "0.33"
