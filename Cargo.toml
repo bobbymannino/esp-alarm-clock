@@ -17,6 +17,7 @@ opt-level = "s"
 [dependencies]
 log = "0.4"
 esp-idf-svc = "0.52"
+anyhow = "1"
 
 [build-dependencies]
 embuild = "0.33"
