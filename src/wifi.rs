@@ -36,7 +36,7 @@ impl<'d> Wifi<'d> {
         Ok(Self { wifi })
     }
 
-    /// Connects to the given WPA3 personal network and waits for an IP address
+    /// Connects to the given WPA 2/3 personal network and waits for an IP address
     /// to be handed out by DHCP.
     ///
     /// # Arguments
@@ -44,10 +44,10 @@ impl<'d> Wifi<'d> {
     /// * `ssid` - Name of the network, at most [`MAX_SSID_LEN`] bytes.
     /// * `password` - Pre shared key, [`MIN_PASSWORD_LEN`] to [`MAX_PASSWORD_LEN`] bytes.
     pub fn connect(&mut self, ssid: &str, password: &str) -> Result<Ipv4Addr> {
-        if ssid.is_empty() || ssid.len() > MAX_SSID_LEN {
+        if ssid.is_empty() {
             bail!("SSID must be 1 to {MAX_SSID_LEN} bytes long");
         }
-        if password.len() < MIN_PASSWORD_LEN || password.len() > MAX_PASSWORD_LEN {
+        if password.len() < MIN_PASSWORD_LEN {
             bail!("WPA3 password must be {MIN_PASSWORD_LEN} to {MAX_PASSWORD_LEN} bytes long");
         }
 
@@ -61,7 +61,7 @@ impl<'d> Wifi<'d> {
         self.wifi.set_configuration(&Configuration::Client(ClientConfiguration {
             ssid: ssid_con,
             password,
-            auth_method: AuthMethod::WPA3Personal,
+            auth_method: AuthMethod::WPA2WPA3Personal,
             ..Default::default()
         }))?;
 
