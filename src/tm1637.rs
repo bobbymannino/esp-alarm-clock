@@ -58,7 +58,7 @@ impl<'d> Tm1637<'d> {
         };
 
         display.segments([BLANK; DIGIT_COUNT])?;
-        display.on()?;
+        display.off()?;
 
         Ok(display)
     }
