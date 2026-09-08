@@ -1,8 +1,9 @@
 mod speaker;
+mod tm1637;
 
-use std::process::ExitCode;
+use std::{process::ExitCode, time::Duration};
 
-use esp_idf_svc::hal::peripherals::Peripherals;
+use esp_idf_svc::hal::{delay::FreeRtos, peripherals::Peripherals};
 
 fn main() -> ExitCode {
     esp_idf_svc::sys::link_patches();
@@ -18,10 +19,35 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     };
 
-    let Ok(_) = speaker.alarm(None) else {
+    let Ok(()) = speaker.alarm(Some(Duration::from_secs(3))) else {
         log::error!("Failed to make alarm sound");
         return ExitCode::FAILURE;
     };
+
+    let Ok(mut display) = tm1637::Tm1637::new(peripherals.pins.gpio18, peripherals.pins.gpio19) else {
+        log::error!("Failed to create TM1637 display");
+        return ExitCode::FAILURE;
+    };
+
+    let Ok(()) = display.brightness(3) else {
+        log::error!("Failed to set brightness");
+        return ExitCode::FAILURE;
+    };
+
+    for num in 0..10_000 {
+        let n1 = tm1637::DIGITS[(num / 1000) % 10];
+        let mut n2 = tm1637::DIGITS[(num / 100) % 10];
+        if (num / 100) % 10 > 4 {
+            n2 |= tm1637::COLON;
+        }
+        let n3 = tm1637::DIGITS[(num / 10) % 10];
+        let n4 = tm1637::DIGITS[num % 10];
+        let Ok(()) = display.segments([n1, n2, n3, n4]) else {
+            log::error!("Failed to write segments");
+            return ExitCode::FAILURE;
+        };
+        FreeRtos::delay_ms(1);
+    }
 
     ExitCode::SUCCESS
 }
