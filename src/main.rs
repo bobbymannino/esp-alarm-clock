@@ -35,13 +35,13 @@ fn main() -> ExitCode {
     };
 
     for num in 0..10_000 {
-        let n1 = tm1637::DIGITS[(num / 1000) % 10];
-        let mut n2 = tm1637::DIGITS[(num / 100) % 10];
+        let n1 = tm1637::DIGITS.get((num / 1000) % 10).copied().unwrap_or(0);
+        let mut n2 = tm1637::DIGITS.get((num / 100) % 10).copied().unwrap_or(0);
         if (num / 100) % 10 > 4 {
             n2 |= tm1637::COLON;
         }
-        let n3 = tm1637::DIGITS[(num / 10) % 10];
-        let n4 = tm1637::DIGITS[num % 10];
+        let n3 = tm1637::DIGITS.get((num / 10) % 10).copied().unwrap_or(0);
+        let n4 = tm1637::DIGITS.get(num % 10).copied().unwrap_or(0);
         let Ok(()) = display.segments([n1, n2, n3, n4]) else {
             log::error!("Failed to write segments");
             return ExitCode::FAILURE;

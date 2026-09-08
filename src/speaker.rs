@@ -24,7 +24,7 @@ impl<'d, S: SpeedMode> Speaker<'d, S> {
         channel: C,
         pin: impl OutputPin + 'd,
     ) -> Result<Self> {
-        let timer_config = TimerConfig::new().frequency(Hertz::from(2_000));
+        let timer_config = TimerConfig::new().frequency(Hertz::from(2_048));
         let timer = LedcTimerDriver::new(timer, &timer_config)?;
 
         let channel = LedcDriver::new(channel, &timer, pin)?;
@@ -42,7 +42,8 @@ impl<'d, S: SpeedMode> Speaker<'d, S> {
     pub fn volume(&mut self, percent: u8) -> Result<()> {
         let percent = u32::from(percent.min(100));
 
-        self.channel.set_duty(self.full_duty * percent / 100)?;
+        let duty = self.full_duty.saturating_mul(percent);
+        self.channel.set_duty(duty / 100)?;
 
         Ok(())
     }
