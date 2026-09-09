@@ -1,8 +1,9 @@
-use anyhow::{Result, bail};
 use esp_idf_svc::hal::{
     delay::Ets,
     gpio::{InputOutput, InputPin, Output, OutputPin, PinDriver, Pull},
 };
+
+use crate::error::{Error, Result};
 
 pub const DIGITS: [u8; 10] = [
     0b0011_1111, // 0
@@ -180,7 +181,7 @@ impl<'d> Tm1637<'d> {
         Ets::delay_us(BIT_US);
 
         if !acked {
-            bail!("TM1637 did not acknowledge byte");
+            return Err(Error::NotAcknowledged);
         }
 
         Ok(())

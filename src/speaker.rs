@@ -1,12 +1,13 @@
 use std::time::{Duration, Instant};
 
-use anyhow::Result;
 use esp_idf_svc::hal::{
     delay::FreeRtos,
     gpio::OutputPin,
     ledc::{LedcChannel, LedcDriver, LedcTimer, LedcTimerDriver, SpeedMode, config::TimerConfig},
     units::Hertz,
 };
+
+use crate::error::Result;
 
 pub struct Speaker<'d, S: SpeedMode> {
     /// Held so the timer keeps running for as long as the speaker exists;

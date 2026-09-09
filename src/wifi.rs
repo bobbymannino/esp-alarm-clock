@@ -1,12 +1,13 @@
 use std::net::Ipv4Addr;
 
-use anyhow::{Result, bail};
 use esp_idf_svc::{
     eventloop::EspSystemEventLoop,
     hal::modem::WifiModemPeripheral,
     nvs::EspDefaultNvsPartition,
     wifi::{AuthMethod, BlockingWifi, ClientConfiguration, Configuration, EspWifi},
 };
+
+use crate::error::{Error, Result};
 
 /// Maximum length, in bytes, of an SSID.
 pub const MAX_SSID_LEN: usize = 32;
@@ -45,17 +46,17 @@ impl<'d> Wifi<'d> {
     /// * `password` - Pre shared key, [`MIN_PASSWORD_LEN`] to [`MAX_PASSWORD_LEN`] bytes.
     pub fn connect(&mut self, ssid: &str, password: &str) -> Result<Ipv4Addr> {
         if ssid.is_empty() {
-            bail!("SSID must be 1 to {MAX_SSID_LEN} bytes long");
+            return Err(Error::InvalidSsid);
         }
         if password.len() < MIN_PASSWORD_LEN {
-            bail!("WPA3 password must be {MIN_PASSWORD_LEN} to {MAX_PASSWORD_LEN} bytes long");
+            return Err(Error::InvalidPassword);
         }
 
         let Ok(ssid_con) = ssid.try_into() else {
-            bail!("SSID does not fit in {MAX_SSID_LEN} bytes");
+            return Err(Error::InvalidSsid);
         };
         let Ok(password) = password.try_into() else {
-            bail!("Password does not fit in {MAX_PASSWORD_LEN} bytes");
+            return Err(Error::InvalidPassword);
         };
 
         self.wifi.set_configuration(&Configuration::Client(ClientConfiguration {
