@@ -186,4 +186,19 @@ impl<'d> Tm1637<'d> {
 
         Ok(())
     }
+
+    /// Display a time.
+    pub fn time(&mut self, hour: u8, minute: u8, colon: bool) -> Result<()> {
+        let d1 = DIGITS.get(usize::from(hour / 10)).copied().unwrap_or(0);
+        let mut d2 = DIGITS.get(usize::from(hour % 10)).copied().unwrap_or(0);
+        if colon {
+            d2 |= COLON;
+        }
+        let d3 = DIGITS.get(usize::from(minute / 10)).copied().unwrap_or(0);
+        let d4 = DIGITS.get(usize::from(minute % 10)).copied().unwrap_or(0);
+
+        self.segments([d1, d2, d3, d4])?;
+
+        Ok(())
+    }
 }
