@@ -18,6 +18,12 @@ pub enum Error {
     InvalidSsid,
     /// The pre shared key was outside the length the standard allows.
     InvalidPassword,
+    /// A non 2xx HTTP response status was returned.
+    HttpStatus(String, u16),
+    /// A worker thread could not be spawned.
+    Io(std::io::Error),
+    /// A worker thread panicked instead of returning a result.
+    WorkerPanicked,
 }
 
 impl Display for Error {
@@ -27,6 +33,9 @@ impl Display for Error {
             Self::NotAcknowledged => f.write_str("TM1637 did not acknowledge byte"),
             Self::InvalidSsid => write!(f, "SSID must be 1 to {MAX_SSID_LEN} bytes long"),
             Self::InvalidPassword => write!(f, "password must be {MIN_PASSWORD_LEN} to {MAX_PASSWORD_LEN} bytes long"),
+            Self::HttpStatus(url, status) => write!(f, "{url} returned {status}"),
+            Self::Io(err) => write!(f, "IO call failed: {err}"),
+            Self::WorkerPanicked => f.write_str("worker thread panicked"),
         }
     }
 }
@@ -34,5 +43,11 @@ impl Display for Error {
 impl From<EspError> for Error {
     fn from(err: EspError) -> Self {
         Self::Esp(err)
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(err: std::io::Error) -> Self {
+        Self::Io(err)
     }
 }
