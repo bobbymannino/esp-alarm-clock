@@ -1,4 +1,5 @@
 mod error;
+mod http;
 mod speaker;
 mod tm1637;
 mod wifi;
