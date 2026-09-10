@@ -187,15 +187,20 @@ impl<'d> Tm1637<'d> {
         Ok(())
     }
 
+    /// Given a `u8` digit value, returns the corresponding digit segment pattern.
+    fn digit_from_u8(num: u8) -> u8 {
+        DIGITS.get(usize::from(num)).copied().unwrap_or(0)
+    }
+
     /// Display a time.
     pub fn time(&mut self, hour: u8, minute: u8, colon: bool) -> Result<()> {
-        let d1 = DIGITS.get(usize::from(hour / 10)).copied().unwrap_or(0);
-        let mut d2 = DIGITS.get(usize::from(hour % 10)).copied().unwrap_or(0);
+        let d1 = Self::digit_from_u8(hour / 10);
+        let mut d2 = Self::digit_from_u8(hour % 10);
         if colon {
             d2 |= COLON;
         }
-        let d3 = DIGITS.get(usize::from(minute / 10)).copied().unwrap_or(0);
-        let d4 = DIGITS.get(usize::from(minute % 10)).copied().unwrap_or(0);
+        let d3 = Self::digit_from_u8(minute / 10);
+        let d4 = Self::digit_from_u8(minute % 10);
 
         self.segments([d1, d2, d3, d4])?;
 
