@@ -17,6 +17,16 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     };
 
+    let Ok(mut display) = tm1637::Tm1637::new(peripherals.pins.gpio18, peripherals.pins.gpio19) else {
+        log::error!("Failed to create TM1637 display");
+        return ExitCode::FAILURE;
+    };
+
+    let Ok(spinner) = display.spinner() else {
+        log::error!("Failed to create spinner");
+        return ExitCode::FAILURE;
+    };
+
     let wifi = match (option_env!("WIFI_SSID"), option_env!("WIFI_PASSWORD")) {
         (Some(ssid), Some(password)) => wifi::Wifi::new(peripherals.modem)
             .and_then(|mut wifi| {
@@ -27,16 +37,6 @@ fn main() -> ExitCode {
             .inspect_err(|err| log::error!("Failed to connect to wifi: {err}"))
             .ok(),
         _ => None,
-    };
-
-    let Ok(mut display) = tm1637::Tm1637::new(peripherals.pins.gpio18, peripherals.pins.gpio19) else {
-        log::error!("Failed to create TM1637 display");
-        return ExitCode::FAILURE;
-    };
-
-    let Ok(()) = display.brightness(3) else {
-        log::error!("Failed to set brightness");
-        return ExitCode::FAILURE;
     };
 
     ExitCode::SUCCESS

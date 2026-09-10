@@ -1,3 +1,12 @@
+use std::{
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    thread::{self, JoinHandle},
+    time::Duration,
+};
+
 use esp_idf_svc::hal::{
     delay::Ets,
     gpio::{InputOutput, InputPin, Output, OutputPin, PinDriver, Pull},
@@ -21,6 +30,20 @@ pub const COLON: u8 = 0b1000_0000;
 pub const BLANK: u8 = 0b0000_0000;
 
 const BIT_US: u32 = 2;
+
+/// The outer segments, clockwise from the top, making up one turn of the loading spinner.
+const SPINNER_FRAMES: [u8; 6] = [
+    0b0000_0001, // top
+    0b0000_0010, // top right
+    0b0000_0100, // bottom right
+    0b0000_1000, // bottom
+    0b0001_0000, // bottom left
+    0b0010_0000, // top left
+];
+/// How long each frame of the loading spinner is shown for.
+const SPINNER_FRAME: Duration = Duration::from_millis(100);
+/// Stack size, in bytes, of the thread the loading spinner runs on.
+const SPINNER_STACK_SIZE: usize = 4 * 1024;
 
 /// Number of digits on the display.
 pub const DIGIT_COUNT: usize = 4;
@@ -205,5 +228,76 @@ impl<'d> Tm1637<'d> {
         self.segments([d1, d2, d3, d4])?;
 
         Ok(())
+    }
+}
+
+impl Tm1637<'static> {
+    /// Clear the display, turn it on and spin a single bar around the last
+    /// digit until [`Spinner::stop`] is called.
+    ///
+    /// The display is driven from a dedicated thread, so the caller is free to
+    /// go and do the slow work the spinner is there to cover.
+    ///
+    /// # Returns
+    ///
+    /// - `Ok`: A handle that gives the display back when stopped.
+    /// - `Err`: An error if the display could not be cleared or the thread could not be spawned.
+    ///
+    /// # Errors
+    ///
+    /// - `Esp`: A GPIO call failed.
+    /// - `NotAcknowledged`: The TM1637 did not acknowledge a byte.
+    /// - `Io`: The thread could not be spawned.
+    pub fn spinner(mut self) -> Result<Spinner> {
+        self.segments([BLANK; DIGIT_COUNT])?;
+        self.on()?;
+
+        let stop = Arc::new(AtomicBool::new(false));
+        let thread_stop = Arc::clone(&stop);
+
+        let handle = thread::Builder::new().stack_size(SPINNER_STACK_SIZE).spawn(move || {
+            for frame in SPINNER_FRAMES.into_iter().cycle() {
+                if thread_stop.load(Ordering::Relaxed) {
+                    break;
+                }
+
+                if let Err(err) = self.segments([BLANK, BLANK, BLANK, frame]) {
+                    log::error!("Spinner failed to set segments: {err}");
+                    break;
+                }
+
+                thread::sleep(SPINNER_FRAME);
+            }
+
+            self
+        })?;
+
+        Ok(Spinner { stop, handle })
+    }
+}
+
+/// A running loading spinner, holding the display it is drawn on.
+pub struct Spinner {
+    stop: Arc<AtomicBool>,
+    handle: JoinHandle<Tm1637<'static>>,
+}
+
+impl Spinner {
+    /// Stop the spinner, blank the display and hand it back.
+    ///
+    /// Blocks for up to one [`SPINNER_FRAME`] while the thread finishes the
+    /// frame it is on.
+    ///
+    /// # Errors
+    ///
+    /// - `WorkerPanicked`: The spinner thread panicked, losing the display.
+    pub fn stop(self) -> Result<Tm1637<'static>> {
+        self.stop.store(true, Ordering::Relaxed);
+
+        let mut display = self.handle.join().map_err(|_| Error::WorkerPanicked)?;
+
+        display.segments([BLANK; DIGIT_COUNT])?;
+
+        Ok(display)
     }
 }
