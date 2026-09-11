@@ -215,7 +215,7 @@ impl<'d> Tm1637<'d> {
         DIGITS.get(usize::from(num)).copied().unwrap_or(0)
     }
 
-    /// Display a time.
+    /// Display a time. Does not turn the screen on or set the brightness.
     pub fn time(&mut self, hour: u8, minute: u8, colon: bool) -> Result<()> {
         let d1 = Self::digit_from_u8(hour / 10);
         let mut d2 = Self::digit_from_u8(hour % 10);
