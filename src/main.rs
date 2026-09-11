@@ -40,23 +40,25 @@ fn main() -> ExitCode {
         _ => None,
     };
 
-    let Some(wifi) = wifi else {
-        log::error!("Failed to connect to wifi");
-        return ExitCode::FAILURE;
-    };
+    let mut hour: u8 = 0;
+    let mut minute: u8 = 0;
 
-    let Ok(_) = wifi.ip() else {
-        log::error!("Failed to get IP");
-        return ExitCode::FAILURE;
-    };
+    if let Some(wifi) = wifi {
+        let Ok(_) = wifi.ip() else {
+            log::error!("Failed to get IP");
+            return ExitCode::FAILURE;
+        };
 
-    let Ok(date) = time::sync().inspect_err(|err| log::error!("Failed to sync time: {err}")) else {
-        return ExitCode::FAILURE;
-    };
+        let Ok(date) = time::sync().inspect_err(|err| log::error!("Failed to sync time: {err}")) else {
+            return ExitCode::FAILURE;
+        };
 
-    let (hour, minute) = time::hour_minute(date);
+        (hour, minute) = time::hour_minute(date);
+    } else if let Ok(date) = time::now() {
+        (hour, minute) = time::hour_minute(date);
+    }
+
     log::info!("Setting time to {hour}:{minute}");
-
     let Ok(mut display) = spinner.stop() else {
         log::error!("Failed to stop spinner");
         return ExitCode::FAILURE;
