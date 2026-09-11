@@ -12,7 +12,10 @@ use esp_idf_svc::hal::{
     gpio::{InputOutput, InputPin, Output, OutputPin, PinDriver, Pull},
 };
 
-use crate::error::{Error, Result};
+use crate::{
+    error::{Error, Result},
+    time,
+};
 
 pub const DIGITS: [u8; 10] = [
     0b0011_1111, // 0
@@ -42,6 +45,8 @@ const SPINNER_FRAMES: [u8; 6] = [
 ];
 /// How long each frame of the loading spinner is shown for.
 const SPINNER_FRAME: Duration = Duration::from_millis(100);
+/// How long each frame of the continuous time display is shown for.
+const CONTINUOUS_TIME: Duration = Duration::from_secs(1);
 /// Stack size, in bytes, of the thread the loading spinner runs on.
 const SPINNER_STACK_SIZE: usize = 4 * 1024;
 
@@ -273,6 +278,56 @@ impl Tm1637<'static> {
         })?;
 
         Ok(Spinner { stop, handle })
+    }
+
+    /// Displays the current time and keeps it up to date on a separate thread.
+    pub fn continuous_time(mut self) -> Result<ContinuousTime> {
+        self.segments([BLANK; DIGIT_COUNT])?;
+        self.on()?;
+
+        let stop = Arc::new(AtomicBool::new(false));
+        let thread_stop = Arc::clone(&stop);
+
+        let handle = thread::Builder::new().stack_size(SPINNER_STACK_SIZE).spawn(move || {
+            let mut colon = true;
+            loop {
+                if thread_stop.load(Ordering::Relaxed) {
+                    break;
+                }
+
+                if let Ok(now) = time::now().inspect_err(|e| log::error!("Failed to get current time: {e}")) {
+                    let (hour, minute) = time::hour_minute(now);
+                    if let Err(err) = self.time(hour, minute, colon) {
+                        log::error!("Spinner failed to set continuous time: {err}");
+                    }
+                }
+
+                colon = !colon;
+
+                thread::sleep(CONTINUOUS_TIME);
+            }
+
+            self
+        })?;
+
+        Ok(ContinuousTime { stop, handle })
+    }
+}
+
+pub struct ContinuousTime {
+    stop: Arc<AtomicBool>,
+    handle: JoinHandle<Tm1637<'static>>,
+}
+
+impl ContinuousTime {
+    pub fn stop(self) -> Result<Tm1637<'static>> {
+        self.stop.store(true, Ordering::Relaxed);
+
+        let mut display = self.handle.join().map_err(|_| Error::WorkerPanicked)?;
+
+        display.segments([BLANK; DIGIT_COUNT])?;
+
+        Ok(display)
     }
 }
 

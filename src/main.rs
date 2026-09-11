@@ -34,21 +34,17 @@ fn run() -> Result<()> {
         .zip(option_env!("WIFI_PASSWORD"))
         .and_then(|(ssid, password)| connect(peripherals.modem, ssid, password));
 
-    let (hour, minute) = match wifi {
-        // The radio has to stay alive until the time has been fetched.
-        Some(wifi) => {
-            wifi.ip()?;
+    if let Some(wifi) = wifi {
+        wifi.ip()?;
+        time::sync()?;
+    }
 
-            time::hour_minute(time::sync()?)
-        }
-        None => time::now().map_or((0, 0), time::hour_minute),
-    };
-    log::info!("Setting time to {hour}:{minute}");
+    let display = spinner.stop()?;
+    let _time = display.continuous_time()?;
 
-    let mut display = spinner.stop()?;
-    display.time(hour, minute, true)?;
-
-    Ok(())
+    loop {
+        std::thread::park();
+    }
 }
 
 /// Joins the given network, logging rather than propagating a failure so the
