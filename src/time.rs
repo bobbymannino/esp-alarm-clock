@@ -1,6 +1,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use chrono::{DateTime, Utc};
+use chrono_tz::Tz;
 use esp_idf_svc::sys;
 
 use crate::{
@@ -11,11 +12,17 @@ use crate::{
 /// Endpoint that answers with the number of milliseconds since the Unix epoch.
 const EPOCH_URL: &str = "https://bobman.dev/api/epoch";
 
+/// Timezone the clock reads and displays in, GMT in winter and BST in summer.
+///
+/// The system clock itself always holds UTC, the offset is only applied on the
+/// way out.
+pub const TIMEZONE: Tz = chrono_tz::Europe::London;
+
 /// Fetches the current time from [`EPOCH_URL`] and writes it to the system clock.
 ///
 /// # Returns
 ///
-/// - `Ok`: The time the clock was set to, in UTC.
+/// - `Ok`: The time the clock was set to, in [`TIMEZONE`].
 /// - `Err`: An error if the time could not be fetched or set.
 ///
 /// # Errors
@@ -27,7 +34,7 @@ const EPOCH_URL: &str = "https://bobman.dev/api/epoch";
 /// - `InvalidEpoch`: The response was not a millisecond timestamp.
 /// - `EpochOutOfRange`: The timestamp is not a representable date.
 /// - `SetTimeFailed`: `settimeofday` rejected the timestamp.
-pub fn sync() -> Result<DateTime<Utc>> {
+pub fn sync() -> Result<DateTime<Tz>> {
     let ms_since_epoch = fetch()?;
     log::info!("Milliseconds since epoch: {ms_since_epoch}");
 
@@ -41,13 +48,13 @@ pub fn sync() -> Result<DateTime<Utc>> {
 ///
 /// # Returns
 ///
-/// - `Ok`: The current time, in UTC.
+/// - `Ok`: The current time, in [`TIMEZONE`].
 /// - `Err`: An error if the clock is outside the range of a [`DateTime`].
 ///
 /// # Errors
 ///
 /// - `EpochOutOfRange`: The clock is not a representable date.
-pub fn now() -> Result<DateTime<Utc>> {
+pub fn now() -> Result<DateTime<Tz>> {
     let ms_since_epoch = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .ok()
@@ -62,14 +69,14 @@ pub fn now() -> Result<DateTime<Utc>> {
 ///
 /// Both always fit in a [`u8`], so the conversion cannot fail.
 #[must_use]
-pub fn hour_minute(date: DateTime<Utc>) -> (u8, u8) {
+pub fn hour_minute(date: DateTime<Tz>) -> (u8, u8) {
     use chrono::Timelike as _;
 
     (u8::try_from(date.hour()).unwrap_or(0), u8::try_from(date.minute()).unwrap_or(0))
 }
 
 /// Writes a millisecond timestamp to the system clock, see [`sync`].
-fn set(ms_since_epoch: i64) -> Result<DateTime<Utc>> {
+fn set(ms_since_epoch: i64) -> Result<DateTime<Tz>> {
     let date = from_millis(ms_since_epoch)?;
 
     // `div_euclid`/`rem_euclid` so a pre-1970 timestamp still floors correctly.
@@ -87,7 +94,7 @@ fn set(ms_since_epoch: i64) -> Result<DateTime<Utc>> {
         return Err(Error::SetTimeFailed(ret));
     }
 
-    log::info!("UTC: {date}");
+    log::info!("{TIMEZONE}: {date}");
 
     Ok(date)
 }
@@ -102,7 +109,9 @@ fn fetch() -> Result<i64> {
         .map_err(|_| Error::InvalidEpoch)
 }
 
-/// Turns a millisecond timestamp into a UTC date.
-fn from_millis(ms_since_epoch: i64) -> Result<DateTime<Utc>> {
-    DateTime::from_timestamp_millis(ms_since_epoch).ok_or(Error::EpochOutOfRange(ms_since_epoch))
+/// Turns a millisecond timestamp into a [`TIMEZONE`] date.
+fn from_millis(ms_since_epoch: i64) -> Result<DateTime<Tz>> {
+    DateTime::<Utc>::from_timestamp_millis(ms_since_epoch)
+        .map(|date| date.with_timezone(&TIMEZONE))
+        .ok_or(Error::EpochOutOfRange(ms_since_epoch))
 }

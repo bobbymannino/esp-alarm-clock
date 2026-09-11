@@ -11,4 +11,6 @@ build-std = ["std", "panic_abort"]
 
 [env]
 MCU = "esp32"
+# Only build the zoneinfo the clock needs, the full database is megabytes.
+CHRONO_TZ_TIMEZONE_FILTER = "Europe/London"
 ESP_IDF_VERSION = "v5.5.4"
