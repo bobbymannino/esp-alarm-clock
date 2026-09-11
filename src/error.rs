@@ -24,6 +24,12 @@ pub enum Error {
     Io(std::io::Error),
     /// A worker thread panicked instead of returning a result.
     WorkerPanicked,
+    /// The epoch endpoint answered with something other than a timestamp.
+    InvalidEpoch,
+    /// A millisecond timestamp is not a representable date.
+    EpochOutOfRange(i64),
+    /// `settimeofday` returned a non zero code.
+    SetTimeFailed(i32),
 }
 
 impl Display for Error {
@@ -36,6 +42,9 @@ impl Display for Error {
             Self::HttpStatus(url, status) => write!(f, "{url} returned {status}"),
             Self::Io(err) => write!(f, "IO call failed: {err}"),
             Self::WorkerPanicked => f.write_str("worker thread panicked"),
+            Self::InvalidEpoch => f.write_str("epoch endpoint did not return a millisecond timestamp"),
+            Self::EpochOutOfRange(ms) => write!(f, "epoch {ms} is out of range"),
+            Self::SetTimeFailed(ret) => write!(f, "settimeofday failed with {ret}"),
         }
     }
 }

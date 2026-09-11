@@ -1,13 +1,13 @@
 mod error;
 mod http;
 mod speaker;
+mod time;
 mod tm1637;
 mod wifi;
 
 use std::process::ExitCode;
 
-use chrono::{DateTime, Timelike};
-use esp_idf_svc::{hal::peripherals::Peripherals, sys};
+use esp_idf_svc::hal::peripherals::Peripherals;
 
 fn main() -> ExitCode {
     esp_idf_svc::sys::link_patches();
@@ -50,42 +50,12 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     };
 
-    // Returns the number of milliseconds since the Unix epoch
-    let Ok(body) = http::get("https://bobman.dev/api/epoch") else {
-        log::error!("Failed to get epoch");
+    let Ok(date) = time::sync().inspect_err(|err| log::error!("Failed to sync time: {err}")) else {
         return ExitCode::FAILURE;
     };
 
-    let Ok(ms_since_epoch) = body
-        .into_iter()
-        .fold(String::new(), |acc, val| format!("{}{}", acc, char::from(val)))
-        .parse::<i64>()
-    else {
-        log::error!("Failed to parse epoch");
-        return ExitCode::FAILURE;
-    };
-    log::info!("Milliseconds since epoch: {ms_since_epoch}");
-
-    // `div_euclid`/`rem_euclid` so a pre-1970 timestamp still floors correctly.
-    let seconds_since_epoch = ms_since_epoch.div_euclid(1000);
-    // Always in `0..1_000_000`, so the conversion cannot fail.
-    let micros = i32::try_from(ms_since_epoch.rem_euclid(1000).saturating_mul(1000)).unwrap_or(0);
-
-    let tv = sys::timeval {
-        tv_sec: seconds_since_epoch,
-        tv_usec: micros,
-    };
-    let ret = unsafe { sys::settimeofday(&raw const tv, std::ptr::null()) };
-    assert_eq!(ret, 0, "settimeofday failed");
-
-    let Some(date) = DateTime::from_timestamp_millis(ms_since_epoch) else {
-        log::error!("Epoch {ms_since_epoch} is out of range");
-        return ExitCode::FAILURE;
-    };
-    log::info!("UTC: {date}");
-    log::info!("Setting time to {}:{}", date.hour(), date.minute());
-    let hour = date.hour().to_be_bytes()[3];
-    let minute = date.minute().to_be_bytes()[3];
+    let (hour, minute) = time::hour_minute(date);
+    log::info!("Setting time to {hour}:{minute}");
 
     let Ok(mut display) = spinner.stop() else {
         log::error!("Failed to stop spinner");
