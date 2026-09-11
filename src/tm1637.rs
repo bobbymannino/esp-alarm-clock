@@ -32,7 +32,7 @@ pub const DIGITS: [u8; 10] = [
 pub const COLON: u8 = 0b1000_0000;
 pub const BLANK: u8 = 0b0000_0000;
 
-const BIT_US: u32 = 2;
+const BIT_US: u32 = 10;
 
 /// The outer segments, clockwise from the top, making up one turn of the loading spinner.
 const SPINNER_FRAMES: [u8; 6] = [
