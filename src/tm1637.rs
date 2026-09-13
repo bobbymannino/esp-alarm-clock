@@ -4,7 +4,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
     thread::{self, JoinHandle},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use esp_idf_svc::hal::{
@@ -353,12 +353,12 @@ impl Worker {
         let thread_stop = Arc::clone(&stop);
 
         let handle = thread::Builder::new().stack_size(WORKER_STACK_SIZE).spawn(move || {
-            while !thread_stop.load(Ordering::Relaxed) {
+            while !thread_stop.load(Ordering::Acquire) {
                 let Some(wait) = tick(&mut display) else {
                     break;
                 };
 
-                thread::sleep(wait);
+                park(&thread_stop, wait);
             }
 
             display
@@ -369,13 +369,30 @@ impl Worker {
 
     /// Stop the worker, blank the display and hand it back.
     fn stop(self) -> Result<Tm1637<'static>> {
-        self.stop.store(true, Ordering::Relaxed);
+        self.stop.store(true, Ordering::Release);
+        // Cut the current wait short rather than letting it run out.
+        self.handle.thread().unpark();
 
         let mut display = self.handle.join().map_err(|_| Error::WorkerPanicked)?;
 
         display.segments([BLANK; DIGIT_COUNT])?;
 
         Ok(display)
+    }
+}
+
+/// Sleep for `timeout`, returning early once `stop` is set.
+///
+/// [`thread::park_timeout`] can wake on its own, so the remaining time is
+/// measured rather than assumed.
+fn park(stop: &AtomicBool, timeout: Duration) {
+    let start = Instant::now();
+    let mut remaining = timeout;
+
+    while !remaining.is_zero() && !stop.load(Ordering::Acquire) {
+        thread::park_timeout(remaining);
+
+        remaining = timeout.saturating_sub(start.elapsed());
     }
 }
 
@@ -404,9 +421,6 @@ pub struct Spinner {
 
 impl Spinner {
     /// Stop the spinner, blank the display and hand it back.
-    ///
-    /// Blocks for up to one [`SPINNER_FRAME`] while the thread finishes the
-    /// frame it is on.
     ///
     /// # Errors
     ///
