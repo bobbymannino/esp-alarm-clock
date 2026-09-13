@@ -7,6 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use chrono::Timelike as _;
 use esp_idf_svc::hal::{
     delay::Ets,
     gpio::{InputOutput, InputPin, Output, OutputPin, PinDriver, Pull},
@@ -45,8 +46,8 @@ const SPINNER_FRAMES: [u8; 6] = [
 ];
 /// How long each frame of the loading spinner is shown for.
 const SPINNER_FRAME: Duration = Duration::from_millis(100);
-/// How long each frame of the continuous time display is shown for.
-const CONTINUOUS_TIME: Duration = Duration::from_secs(1);
+/// How long a worker waits after a tick it could not time against the clock.
+const FALLBACK_TICK: Duration = Duration::from_secs(1);
 /// Stack size, in bytes, of the thread a display worker runs on.
 const WORKER_STACK_SIZE: usize = 4 * 1024;
 
@@ -308,6 +309,10 @@ impl Tm1637<'static> {
 
     /// Displays the current time and keeps it up to date on a separate thread.
     ///
+    /// The thread wakes on the second boundary rather than every second from
+    /// whenever it started, so the colon stays in step with the clock instead of
+    /// drifting, and only the digits that actually changed are sent.
+    ///
     /// # Errors
     ///
     /// - `Esp`: A GPIO call failed.
@@ -317,20 +322,22 @@ impl Tm1637<'static> {
         self.segments([BLANK; DIGIT_COUNT])?;
         self.on()?;
 
-        let mut colon = true;
+        Worker::spawn(self, |display| {
+            let Ok(now) = time::now().inspect_err(|err| log::error!("Failed to get current time: {err}")) else {
+                // Keep the clock running, the next tick may well read fine.
+                return Some(FALLBACK_TICK);
+            };
 
-        Worker::spawn(self, move |display| {
-            if let Ok(now) = time::now().inspect_err(|err| log::error!("Failed to get current time: {err}")) {
-                let (hour, minute) = time::hour_minute(now);
+            let (hour, minute) = time::hour_minute(now);
+            // Taken from the clock rather than toggled, so a missed tick cannot
+            // leave the colon blinking out of phase with the seconds.
+            let colon = now.second() % 2 == 0;
 
-                if let Err(err) = display.time(hour, minute, colon) {
-                    log::error!("Failed to set continuous time: {err}");
-                }
+            if let Err(err) = display.time(hour, minute, colon) {
+                log::error!("Failed to set continuous time: {err}");
             }
 
-            colon = !colon;
-
-            Some(CONTINUOUS_TIME)
+            Some(time::until_next_second(now))
         })
         .map(|worker| ContinuousTime { worker })
     }
