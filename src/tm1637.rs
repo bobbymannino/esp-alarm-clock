@@ -47,8 +47,8 @@ const SPINNER_FRAMES: [u8; 6] = [
 const SPINNER_FRAME: Duration = Duration::from_millis(100);
 /// How long each frame of the continuous time display is shown for.
 const CONTINUOUS_TIME: Duration = Duration::from_secs(1);
-/// Stack size, in bytes, of the thread the loading spinner runs on.
-const SPINNER_STACK_SIZE: usize = 4 * 1024;
+/// Stack size, in bytes, of the thread a display worker runs on.
+const WORKER_STACK_SIZE: usize = 4 * 1024;
 
 /// Number of digits on the display.
 pub const DIGIT_COUNT: usize = 4;
@@ -274,7 +274,8 @@ impl Tm1637<'static> {
     /// digit until [`Spinner::stop`] is called.
     ///
     /// The display is driven from a dedicated thread, so the caller is free to
-    /// go and do the slow work the spinner is there to cover.
+    /// go and do the slow work the spinner is there to cover. Only the digit
+    /// the bar is drawn on is rewritten each frame.
     ///
     /// # Returns
     ///
@@ -290,70 +291,84 @@ impl Tm1637<'static> {
         self.segments([BLANK; DIGIT_COUNT])?;
         self.on()?;
 
-        let stop = Arc::new(AtomicBool::new(false));
-        let thread_stop = Arc::clone(&stop);
+        let mut frames = SPINNER_FRAMES.into_iter().cycle();
 
-        let handle = thread::Builder::new().stack_size(SPINNER_STACK_SIZE).spawn(move || {
-            for frame in SPINNER_FRAMES.into_iter().cycle() {
-                if thread_stop.load(Ordering::Relaxed) {
-                    break;
-                }
+        Worker::spawn(self, move |display| {
+            let frame = frames.next().unwrap_or(BLANK);
 
-                if let Err(err) = self.segments([BLANK, BLANK, BLANK, frame]) {
-                    log::error!("Spinner failed to set segments: {err}");
-                    break;
-                }
+            display
+                .segments([BLANK, BLANK, BLANK, frame])
+                .inspect_err(|err| log::error!("Spinner failed to set segments: {err}"))
+                .ok()?;
 
-                thread::sleep(SPINNER_FRAME);
-            }
-
-            self
-        })?;
-
-        Ok(Spinner { stop, handle })
+            Some(SPINNER_FRAME)
+        })
+        .map(|worker| Spinner { worker })
     }
 
     /// Displays the current time and keeps it up to date on a separate thread.
+    ///
+    /// # Errors
+    ///
+    /// - `Esp`: A GPIO call failed.
+    /// - `NotAcknowledged`: The TM1637 did not acknowledge a byte.
+    /// - `Io`: The thread could not be spawned.
     pub fn continuous_time(mut self) -> Result<ContinuousTime> {
         self.segments([BLANK; DIGIT_COUNT])?;
         self.on()?;
 
-        let stop = Arc::new(AtomicBool::new(false));
-        let thread_stop = Arc::clone(&stop);
+        let mut colon = true;
 
-        let handle = thread::Builder::new().stack_size(SPINNER_STACK_SIZE).spawn(move || {
-            let mut colon = true;
-            loop {
-                if thread_stop.load(Ordering::Relaxed) {
-                    break;
+        Worker::spawn(self, move |display| {
+            if let Ok(now) = time::now().inspect_err(|err| log::error!("Failed to get current time: {err}")) {
+                let (hour, minute) = time::hour_minute(now);
+
+                if let Err(err) = display.time(hour, minute, colon) {
+                    log::error!("Failed to set continuous time: {err}");
                 }
-
-                if let Ok(now) = time::now().inspect_err(|e| log::error!("Failed to get current time: {e}")) {
-                    let (hour, minute) = time::hour_minute(now);
-                    if let Err(err) = self.time(hour, minute, colon) {
-                        log::error!("Spinner failed to set continuous time: {err}");
-                    }
-                }
-
-                colon = !colon;
-
-                thread::sleep(CONTINUOUS_TIME);
             }
 
-            self
-        })?;
+            colon = !colon;
 
-        Ok(ContinuousTime { stop, handle })
+            Some(CONTINUOUS_TIME)
+        })
+        .map(|worker| ContinuousTime { worker })
     }
 }
 
-pub struct ContinuousTime {
+/// A worker thread drawing to the display it owns until it is stopped.
+struct Worker {
     stop: Arc<AtomicBool>,
     handle: JoinHandle<Tm1637<'static>>,
 }
 
-impl ContinuousTime {
-    pub fn stop(self) -> Result<Tm1637<'static>> {
+impl Worker {
+    /// Run `tick` on its own thread, waiting for the [`Duration`] it returns
+    /// between calls, until it returns `None` or the worker is stopped.
+    fn spawn(
+        mut display: Tm1637<'static>,
+        mut tick: impl FnMut(&mut Tm1637<'static>) -> Option<Duration> + Send + 'static,
+    ) -> Result<Self> {
+        let stop = Arc::new(AtomicBool::new(false));
+        let thread_stop = Arc::clone(&stop);
+
+        let handle = thread::Builder::new().stack_size(WORKER_STACK_SIZE).spawn(move || {
+            while !thread_stop.load(Ordering::Relaxed) {
+                let Some(wait) = tick(&mut display) else {
+                    break;
+                };
+
+                thread::sleep(wait);
+            }
+
+            display
+        })?;
+
+        Ok(Self { stop, handle })
+    }
+
+    /// Stop the worker, blank the display and hand it back.
+    fn stop(self) -> Result<Tm1637<'static>> {
         self.stop.store(true, Ordering::Relaxed);
 
         let mut display = self.handle.join().map_err(|_| Error::WorkerPanicked)?;
@@ -364,10 +379,27 @@ impl ContinuousTime {
     }
 }
 
+/// A running clock, holding the display it is drawn on.
+pub struct ContinuousTime {
+    worker: Worker,
+}
+
+impl ContinuousTime {
+    /// Stop the clock, blank the display and hand it back.
+    ///
+    /// # Errors
+    ///
+    /// - `WorkerPanicked`: The worker thread panicked, losing the display.
+    /// - `Esp`: A GPIO call failed while blanking the display.
+    /// - `NotAcknowledged`: The TM1637 did not acknowledge a byte.
+    pub fn stop(self) -> Result<Tm1637<'static>> {
+        self.worker.stop()
+    }
+}
+
 /// A running loading spinner, holding the display it is drawn on.
 pub struct Spinner {
-    stop: Arc<AtomicBool>,
-    handle: JoinHandle<Tm1637<'static>>,
+    worker: Worker,
 }
 
 impl Spinner {
@@ -379,13 +411,9 @@ impl Spinner {
     /// # Errors
     ///
     /// - `WorkerPanicked`: The spinner thread panicked, losing the display.
+    /// - `Esp`: A GPIO call failed while blanking the display.
+    /// - `NotAcknowledged`: The TM1637 did not acknowledge a byte.
     pub fn stop(self) -> Result<Tm1637<'static>> {
-        self.stop.store(true, Ordering::Relaxed);
-
-        let mut display = self.handle.join().map_err(|_| Error::WorkerPanicked)?;
-
-        display.segments([BLANK; DIGIT_COUNT])?;
-
-        Ok(display)
+        self.worker.stop()
     }
 }
