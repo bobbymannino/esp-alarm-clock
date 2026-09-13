@@ -69,6 +69,9 @@ pub struct Tm1637<'d> {
     clk: PinDriver<'d, Output>,
     dio: PinDriver<'d, InputOutput>,
     brightness: u8,
+    /// What the display memory currently holds, or `None` when it is unknown
+    /// because a write failed part way through.
+    shown: Option<[u8; DIGIT_COUNT]>,
 }
 
 impl<'d> Tm1637<'d> {
@@ -84,6 +87,7 @@ impl<'d> Tm1637<'d> {
             clk,
             dio,
             brightness: MAX_BRIGHTNESS,
+            shown: None,
         };
 
         display.segments([BLANK; DIGIT_COUNT])?;
@@ -117,25 +121,54 @@ impl<'d> Tm1637<'d> {
     ///
     /// Only the second digit has the colon wired up, so [`COLON`] is ignored on
     /// every other digit.
+    ///
+    /// Only the digits that differ from what is already on the display are sent,
+    /// so a call that changes nothing costs nothing on the bus and a blinking
+    /// colon costs a single byte.
     pub fn segments(&mut self, segments: [u8; DIGIT_COUNT]) -> Result<()> {
-        self.start()?;
-        let written = self.write_byte(CMD_WRITE_AUTO);
-        self.stop()?;
-        written?;
+        let Some((address, count)) = self.pending(segments) else {
+            return Ok(());
+        };
+
+        // Anything from here on can fail mid transfer, leaving the display
+        // memory as neither the old nor the new value.
+        self.shown = None;
+
+        self.command(CMD_WRITE_AUTO)?;
 
         self.start()?;
-        let written = (|| {
-            self.write_byte(CMD_ADDRESS)?;
+        let written: Result<()> = (|| {
+            self.write_byte(CMD_ADDRESS | u8::try_from(address).unwrap_or(0))?;
 
-            for segment in segments {
-                self.write_byte(segment)?;
+            for segment in segments.iter().skip(address).take(count) {
+                self.write_byte(*segment)?;
             }
 
             Ok(())
         })();
         self.stop()?;
+        written?;
 
-        written
+        self.shown = Some(segments);
+
+        Ok(())
+    }
+
+    /// The address and length of the run of digits that differ from what the
+    /// display is showing, or `None` if it is already showing `segments`.
+    fn pending(&self, segments: [u8; DIGIT_COUNT]) -> Option<(usize, usize)> {
+        let Some(shown) = self.shown else {
+            return Some((0, DIGIT_COUNT));
+        };
+
+        let mut range: Option<(usize, usize)> = None;
+        for (index, (old, new)) in shown.into_iter().zip(segments).enumerate() {
+            if old != new {
+                range = Some(range.map_or((index, index), |(first, _)| (first, index)));
+            }
+        }
+
+        range.map(|(first, last)| (first, last.saturating_sub(first).saturating_add(1)))
     }
 
     /// Send a single command byte, framed by its own start and stop.
