@@ -1,3 +1,4 @@
+mod ec11;
 mod error;
 mod http;
 mod speaker;
