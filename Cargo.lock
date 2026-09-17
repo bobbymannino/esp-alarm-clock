@@ -12,6 +12,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "alarm-core"
+version = "0.1.0"
+
+[[package]]
 name = "aligned"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -553,6 +557,7 @@ dependencies = [
 name = "esp-alarm-clock"
 version = "0.1.0"
 dependencies = [
+ "alarm-core",
  "chrono",
  "chrono-tz",
  "embuild",
