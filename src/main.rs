@@ -2,6 +2,7 @@ mod ec11;
 mod error;
 mod http;
 mod speaker;
+mod storage;
 mod time;
 mod tm1637;
 mod wifi;
@@ -10,7 +11,7 @@ use std::process::ExitCode;
 
 use esp_idf_svc::{hal::peripherals::Peripherals, nvs::EspDefaultNvsPartition};
 
-use crate::{error::Result, wifi::Wifi};
+use crate::{error::Result, storage::Storage, wifi::Wifi};
 
 fn main() -> ExitCode {
     esp_idf_svc::sys::link_patches();
@@ -27,11 +28,16 @@ fn main() -> ExitCode {
 
 fn run() -> Result<()> {
     let peripherals = Peripherals::take()?;
-    let nvs = EspDefaultNvsPartition::take()?;
 
     let display = tm1637::Tm1637::new(peripherals.pins.gpio18, peripherals.pins.gpio19)?;
     let spinner = display.spinner()?;
     let dial = ec11::Ec11::new(peripherals.pins.gpio25, peripherals.pins.gpio26, peripherals.pins.gpio27)?;
+
+    let nvs = EspDefaultNvsPartition::take()?;
+    let storage = Storage::new(nvs.clone())?;
+    for alarm in storage.alarms()? {
+        log::info!("Alarm: {alarm:?}");
+    }
 
     let wifi = option_env!("WIFI_SSID")
         .zip(option_env!("WIFI_PASSWORD"))
