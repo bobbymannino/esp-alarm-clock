@@ -1,3 +1,4 @@
+mod ec11;
 mod error;
 mod http;
 mod speaker;
@@ -29,6 +30,7 @@ fn run() -> Result<()> {
 
     let display = tm1637::Tm1637::new(peripherals.pins.gpio18, peripherals.pins.gpio19)?;
     let spinner = display.spinner()?;
+    let dial = ec11::Ec11::new(peripherals.pins.gpio25, peripherals.pins.gpio26, peripherals.pins.gpio27)?;
 
     let wifi = option_env!("WIFI_SSID")
         .zip(option_env!("WIFI_PASSWORD"))
@@ -41,6 +43,10 @@ fn run() -> Result<()> {
 
     let display = spinner.stop()?;
     let _time = display.continuous_time()?;
+
+    for event in dial.events()? {
+        log::info!("Dial: {event:?}");
+    }
 
     loop {
         std::thread::park();
