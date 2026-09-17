@@ -8,7 +8,7 @@ mod wifi;
 
 use std::process::ExitCode;
 
-use esp_idf_svc::hal::peripherals::Peripherals;
+use esp_idf_svc::{hal::peripherals::Peripherals, nvs::EspDefaultNvsPartition};
 
 use crate::{error::Result, wifi::Wifi};
 
@@ -27,6 +27,7 @@ fn main() -> ExitCode {
 
 fn run() -> Result<()> {
     let peripherals = Peripherals::take()?;
+    let nvs = EspDefaultNvsPartition::take()?;
 
     let display = tm1637::Tm1637::new(peripherals.pins.gpio18, peripherals.pins.gpio19)?;
     let spinner = display.spinner()?;
@@ -34,7 +35,7 @@ fn run() -> Result<()> {
 
     let wifi = option_env!("WIFI_SSID")
         .zip(option_env!("WIFI_PASSWORD"))
-        .and_then(|(ssid, password)| connect(peripherals.modem, ssid, password));
+        .and_then(|(ssid, password)| connect(peripherals.modem, ssid, password, nvs.clone()));
 
     if let Some(wifi) = wifi {
         wifi.ip()?;
@@ -55,8 +56,13 @@ fn run() -> Result<()> {
 
 /// Joins the given network, logging rather than propagating a failure so the
 /// clock can still run offline.
-fn connect<'d>(modem: impl esp_idf_svc::hal::modem::WifiModemPeripheral + 'd, ssid: &str, password: &str) -> Option<Wifi<'d>> {
-    Wifi::new(modem)
+fn connect<'d>(
+    modem: impl esp_idf_svc::hal::modem::WifiModemPeripheral + 'd,
+    ssid: &str,
+    password: &str,
+    nvs: EspDefaultNvsPartition,
+) -> Option<Wifi<'d>> {
+    Wifi::new(modem, nvs)
         .and_then(|mut wifi| {
             let ip = wifi.connect(ssid, password)?;
             log::info!("Connected to {ssid} with IP {ip}");

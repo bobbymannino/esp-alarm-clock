@@ -3,7 +3,7 @@ use std::net::Ipv4Addr;
 use esp_idf_svc::{
     eventloop::EspSystemEventLoop,
     hal::modem::WifiModemPeripheral,
-    nvs::EspDefaultNvsPartition,
+    nvs::{EspDefaultNvsPartition, EspNvsPartition},
     wifi::{AuthMethod, BlockingWifi, ClientConfiguration, Configuration, EspWifi},
 };
 
@@ -25,9 +25,8 @@ pub struct Wifi<'d> {
 
 impl<'d> Wifi<'d> {
     /// Creates a new [`Wifi`] and starts the radio in station mode.
-    pub fn new<M: WifiModemPeripheral + 'd>(modem: M) -> Result<Self> {
+    pub fn new<M: WifiModemPeripheral + 'd>(modem: M, nvs: EspDefaultNvsPartition) -> Result<Self> {
         let sysloop = EspSystemEventLoop::take()?;
-        let nvs = EspDefaultNvsPartition::take()?;
 
         let wifi = EspWifi::new(modem, sysloop.clone(), Some(nvs))?;
         let mut wifi = BlockingWifi::wrap(wifi, sysloop)?;
