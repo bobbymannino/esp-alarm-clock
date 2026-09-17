@@ -1,2 +1,0 @@
-[alias]
-t = "test -p alarm-core --target aarch64-apple-darwin"

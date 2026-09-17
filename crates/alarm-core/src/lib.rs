@@ -2,9 +2,9 @@ use std::ops::BitAnd as _;
 
 #[derive(Debug)]
 pub struct Alarm {
-    hour: u8,
-    minute: u8,
-    enabled: bool,
+    pub hour: u8,
+    pub minute: u8,
+    pub enabled: bool,
 }
 
 impl Alarm {
