@@ -57,3 +57,14 @@ impl Alarm {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_alarm_from_bytes_disabled() {
+        let bytes = [&u8::from(0b1000_0000), &u8::MIN];
+        let alarm = Alarm::from_bytes(bytes);
+        assert!(alarm.enabled)
+    }
+}
