@@ -1,6 +1,7 @@
+use alarm_core::Alarm;
 use esp_idf_svc::nvs::{EspDefaultNvsPartition, EspNvs, NvsDefault};
 
-use crate::{error::Result, storage::alarms::Alarm};
+use crate::error::Result;
 
 mod alarms;
 
