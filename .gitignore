@@ -4,4 +4,9 @@ target/
 # Mac
 .DS_Store
 
+# Environment
 .env
+
+# Storage
+nvs.bin
+pt.bin
