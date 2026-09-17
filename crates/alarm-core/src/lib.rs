@@ -10,7 +10,8 @@ pub struct Alarm {
 impl Alarm {
     /// Create an [`Alarm`] from 2 bytes.
     pub fn from_bytes(bytes: [&u8; 2]) -> Self {
-        let enabled = bytes[0].bitand(0b1000_0000) == 0b1000_0000;
+        // moves the first bit up to the least significant bit
+        let enabled = bytes[0] >> 7 == 1;
         let hour = bytes[0].bitand(0b0111_1100);
         Self {
             hour: 0,
