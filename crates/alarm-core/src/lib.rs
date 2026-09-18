@@ -14,7 +14,11 @@ impl Alarm {
         let hour = (bytes[0] >> 3) & 0b1_1111;
         let minute = (u16::from(bytes[0].clone()) << 8) | u16::from(bytes[1].clone());
         let minute = ((minute >> 4) & 0b0011_1111) as u8;
-        Self { hour, minute, enabled }
+        Self {
+            hour: hour.min(23),
+            minute: minute.min(59),
+            enabled,
+        }
         // todo!("comment with bit table");
         // todo!("is this the most efficient way to bit convert?");
     }
@@ -52,6 +56,13 @@ mod tests {
     #[test]
     fn test_alarm_from_bytes_hour_23() {
         let bytes = [&(23 << 3), &u8::MIN];
+        let alarm = Alarm::from_bytes(bytes);
+        assert_eq!(alarm.hour, 23);
+    }
+
+    #[test]
+    fn test_alarm_from_bytes_hour_25() {
+        let bytes = [&(25 << 3), &u8::MIN];
         let alarm = Alarm::from_bytes(bytes);
         assert_eq!(alarm.hour, 23);
     }
@@ -124,6 +135,15 @@ mod tests {
     #[test]
     fn test_alarm_from_bytes_minute_59() {
         let bytes = [&0b0000_0011, &0b1011_0000];
+        let alarm = Alarm::from_bytes(bytes);
+        assert_eq!(alarm.minute, 59);
+    }
+
+    #[test]
+    fn test_alarm_from_bytes_minute_63() {
+        // The largest value the 6 minute bits can hold
+        // Should be capped at 59
+        let bytes = [&0b0000_0011, &0b1111_0000];
         let alarm = Alarm::from_bytes(bytes);
         assert_eq!(alarm.minute, 59);
     }
