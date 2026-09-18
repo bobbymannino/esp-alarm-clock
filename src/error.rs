@@ -30,6 +30,8 @@ pub enum Error {
     EpochOutOfRange(i64),
     /// `settimeofday` returned a non zero code.
     SetTimeFailed(i32),
+    /// Memory has been corrupted.
+    MemoryCorruption,
 }
 
 impl Display for Error {
@@ -45,6 +47,7 @@ impl Display for Error {
             Self::InvalidEpoch => f.write_str("epoch endpoint did not return a millisecond timestamp"),
             Self::EpochOutOfRange(ms) => write!(f, "epoch {ms} is out of range"),
             Self::SetTimeFailed(ret) => write!(f, "settimeofday failed with {ret}"),
+            Self::MemoryCorruption => f.write_str("memory corruption"),
         }
     }
 }

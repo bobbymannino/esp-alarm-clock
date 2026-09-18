@@ -1,7 +1,10 @@
 use alarm_core::Alarm;
 use esp_idf_svc::nvs::{EspNvs, NvsDefault};
 
-use crate::{error::Result, storage::Store};
+use crate::{
+    error::{Error, Result},
+    storage::Store,
+};
 
 /// Namespace used for storing alarms.
 pub const NAMESPACE: &str = "alarms";
@@ -19,7 +22,7 @@ impl Store<Self> for Alarm {
         let mut buf = [0u8; ALARM_SIZE * MAX_ALARMS];
 
         let Some(blob) = storage.get_blob(Self::LIST_KEY, &mut buf)? else {
-            return Ok(Vec::new());
+            return Err(Error::MemoryCorruption);
         };
 
         let alarms = blob
