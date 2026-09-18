@@ -23,6 +23,8 @@ pub fn run() {
         // This must be called before using any GPUI Component features.
         gpui_kit::init(cx);
 
+        crate::actions::init(cx);
+
         cx.on_window_closed(|cx, _| {
             if cx.windows().is_empty() {
                 cx.quit();
