@@ -29,23 +29,23 @@ impl Alarm {
     ///
     /// Byte 1 bits `[3:0]` are unused.
     #[must_use]
-    pub fn from_bytes(bytes: [&u8; 2]) -> Self {
+    pub const fn from_bytes(bytes: [&u8; 2]) -> Self {
         // Moves the first bit up to the least significant bit
-        let enabled = bytes[0] >> 7 == 1;
-        let hour = (bytes[0] >> 2) & 0b1_1111;
+        let enabled = *bytes[0] >> 7 == 1;
+        let hour = (*bytes[0] >> 2) & 0b1_1111;
         // last 2 bits of first byte and first 4 bits of second byte
-        let minute = (bytes[0] << 6 >> 2) | (bytes[1] >> 4);
+        let minute = (*bytes[0] << 6 >> 2) | (*bytes[1] >> 4);
         Self {
-            hour: hour.min(23),
-            minute: minute.min(59),
+            hour: if hour > 23 { 23 } else { hour },
+            minute: if minute > 59 { 59 } else { minute },
             enabled,
         }
     }
 
     /// Turn an [`Alarm`] into a 2 byte array for storing.
     #[must_use]
-    pub fn to_bytes(&self) -> [u8; 2] {
-        let enabled = u8::from(self.enabled);
+    pub const fn to_bytes(&self) -> [u8; 2] {
+        let enabled = if self.enabled { 1 } else { 0 };
         let hour = self.hour & 0b1_1111;
         let minute = self.minute & 0b11_1111;
         let byte1 = enabled << 7 | hour << 2 | minute >> 4;
