@@ -9,13 +9,18 @@ impl Alarm {
     /// Create an [`Alarm`] from 2 bytes.
     #[must_use]
     pub fn from_bytes(bytes: [&u8; 2]) -> Self {
-        // moves the first bit up to the least significant bit
+        // Moves the first bit up to the least significant bit
         let enabled = bytes[0] >> 7 == 1;
         let hour = (bytes[0] >> 3) & 0b1_1111;
-        Self { hour, minute: 0, enabled }
-        // todo!("finish the Alarm");
+        let minute = (u16::from(bytes[0].clone()) << 8) | u16::from(bytes[1].clone());
+        let minute = ((minute >> 4) & 0b0011_1111) as u8;
+        Self { hour, minute, enabled }
         // todo!("comment with bit table");
         // todo!("is this the most efficient way to bit convert?");
+    }
+
+    pub fn to_bytes(&self) -> [u8; 2] {
+        todo!();
     }
 }
 
@@ -63,5 +68,63 @@ mod tests {
         let bytes = [&(1 << 3), &u8::MIN];
         let alarm = Alarm::from_bytes(bytes);
         assert_eq!(alarm.hour, 1);
+    }
+
+    #[test]
+    fn test_alarm_from_bytes_minute_0() {
+        let bytes = [&u8::MIN, &u8::MIN];
+        let alarm = Alarm::from_bytes(bytes);
+        assert_eq!(alarm.minute, 0);
+    }
+
+    #[test]
+    fn test_alarm_from_bytes_minute_1() {
+        let bytes = [&u8::MIN, &(1 << 4)];
+        let alarm = Alarm::from_bytes(bytes);
+        assert_eq!(alarm.minute, 1);
+    }
+
+    #[test]
+    fn test_alarm_from_bytes_minute_10() {
+        let bytes = [&u8::MIN, &(10 << 4)];
+        let alarm = Alarm::from_bytes(bytes);
+        assert_eq!(alarm.minute, 10);
+    }
+
+    #[test]
+    fn test_alarm_from_bytes_minute_15() {
+        // The largest minute that fits entirely in the high nibble of byte 1
+        let bytes = [&u8::MIN, &(15 << 4)];
+        let alarm = Alarm::from_bytes(bytes);
+        assert_eq!(alarm.minute, 15);
+    }
+
+    #[test]
+    fn test_alarm_from_bytes_minute_16() {
+        // The smallest minute that needs the low 2 bits of byte 0
+        let bytes = [&0b0000_0001, &u8::MIN];
+        let alarm = Alarm::from_bytes(bytes);
+        assert_eq!(alarm.minute, 16);
+    }
+
+    #[test]
+    fn test_alarm_from_bytes_minute_30() {
+        let bytes = [&0b0000_0001, &0b1110_0000];
+        let alarm = Alarm::from_bytes(bytes);
+        assert_eq!(alarm.minute, 30);
+    }
+
+    #[test]
+    fn test_alarm_from_bytes_minute_45() {
+        let bytes = [&0b0000_0010, &0b1101_0000];
+        let alarm = Alarm::from_bytes(bytes);
+        assert_eq!(alarm.minute, 45);
+    }
+
+    #[test]
+    fn test_alarm_from_bytes_minute_59() {
+        let bytes = [&0b0000_0011, &0b1011_0000];
+        let alarm = Alarm::from_bytes(bytes);
+        assert_eq!(alarm.minute, 59);
     }
 }
