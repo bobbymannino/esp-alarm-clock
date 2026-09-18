@@ -38,8 +38,15 @@ impl Alarm {
         // todo!("is this the most efficient way to bit convert?");
     }
 
+    /// Turn an [`Alarm`] into a 2 byte array for storing.
+    #[must_use]
     pub fn to_bytes(&self) -> [u8; 2] {
-        todo!();
+        let enabled = u8::from(self.enabled);
+        let hour = self.hour & 0b1_1111;
+        let minute = self.minute & 0b11_1111;
+        let byte1 = enabled << 7 | hour << 2 | minute >> 4;
+        let byte2 = minute << 4;
+        [byte1, byte2]
     }
 }
 
@@ -219,5 +226,53 @@ mod tests {
         assert!(alarm.enabled);
         assert_eq!(alarm.hour, 16);
         assert_eq!(alarm.minute, 0);
+    }
+
+    #[test]
+    #[allow(clippy::unusual_byte_groupings)]
+    fn test_alarm_to_bytes_enabled_00_00() {
+        let alarm = Alarm {
+            enabled: true,
+            hour: 0,
+            minute: 0,
+        };
+        let bytes = alarm.to_bytes();
+        assert_eq!(bytes, [0b1_00000_00, 0]);
+    }
+
+    #[test]
+    #[allow(clippy::unusual_byte_groupings)]
+    fn test_alarm_to_bytes_disabled_00_00() {
+        let alarm = Alarm {
+            enabled: false,
+            hour: 0,
+            minute: 0,
+        };
+        let bytes = alarm.to_bytes();
+        assert_eq!(bytes, [0, 0]);
+    }
+
+    #[test]
+    #[allow(clippy::unusual_byte_groupings)]
+    fn test_alarm_to_bytes_disabled_12_14() {
+        let alarm = Alarm {
+            enabled: false,
+            hour: 12,
+            minute: 45,
+        };
+        let bytes = alarm.to_bytes();
+        assert_eq!(bytes, [0b0_01100_10, 0b1101_0000]);
+    }
+
+    #[test]
+    #[allow(clippy::unusual_byte_groupings)]
+    fn test_alarm_to_bytes_enabled_23_59() {
+        let alarm = Alarm {
+            enabled: true,
+            hour: 23,
+            minute: 59,
+        };
+        let bytes = alarm.to_bytes();
+        assert_eq!(bytes, [0b1_10111_11, 0b1011_0000]);
     }
 }
