@@ -31,6 +31,13 @@ fn main() {
         // This must be called before using any GPUI Component features.
         gpui_kit::init(cx);
 
+        cx.on_window_closed(|cx, _| {
+            if cx.windows().is_empty() {
+                cx.quit();
+            }
+        })
+        .detach();
+
         let window_options = WindowOptions {
             window_min_size: Some(Size::new(Pixels::from(600.0), Pixels::from(600.0))),
             titlebar: Some(TitlebarOptions {
