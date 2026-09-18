@@ -14,3 +14,6 @@ MCU = "esp32"
 # Only build the zoneinfo the clock needs, the full database is megabytes.
 CHRONO_TZ_TIMEZONE_FILTER = "Europe/London"
 ESP_IDF_VERSION = "v5.5.4"
+
+[alias]
+t = "test -p alarm-core --target aarch64-apple-darwin"

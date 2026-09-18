@@ -18,7 +18,11 @@ codegen-units = 1
 panic = "abort"
 strip = true
 
+[workspace]
+members = ["crates/alarm-core"]
+
 [dependencies]
+alarm-core = { path = "crates/alarm-core" }
 chrono = { version = "0.4", default-features = false }
 log = "0.4"
 esp-idf-svc = "0.53"
