@@ -35,4 +35,14 @@ impl Store<Self> for Alarm {
 
         Ok(alarms)
     }
+
+    fn store(storage: &EspNvs<NvsDefault>, list: Vec<Self>) -> Result<()> {
+        let mut blob = Vec::with_capacity(list.capacity().saturating_mul(ALARM_SIZE));
+
+        for alarm in list {
+            blob.extend_from_slice(&alarm.to_bytes());
+        }
+
+        Ok(storage.set_blob(Self::LIST_KEY, &blob)?)
+    }
 }

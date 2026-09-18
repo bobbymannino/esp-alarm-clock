@@ -18,6 +18,10 @@ impl Storage {
     pub fn alarms(&self) -> Result<Vec<Alarm>> {
         Alarm::list(&self.alarms)
     }
+
+    pub fn set_alarms(&self, alarms: Vec<Alarm>) -> Result<()> {
+        Alarm::store(&self.alarms, alarms)
+    }
 }
 
 trait Store<T> {
@@ -26,4 +30,7 @@ trait Store<T> {
 
     /// Lists all items stored in the NVS.
     fn list(storage: &EspNvs<NvsDefault>) -> Result<Vec<T>>;
+
+    /// Store a list of items in the NVS.
+    fn store(storage: &EspNvs<NvsDefault>, list: Vec<T>) -> Result<()>;
 }

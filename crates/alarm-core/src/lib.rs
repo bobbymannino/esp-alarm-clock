@@ -6,6 +6,11 @@ pub struct Alarm {
 }
 
 impl Alarm {
+    #[must_use]
+    pub const fn new(hour: u8, minute: u8, enabled: bool) -> Self {
+        Self { hour, minute, enabled }
+    }
+
     /// Create an [`Alarm`] from 2 bytes.
     ///
     /// ```text

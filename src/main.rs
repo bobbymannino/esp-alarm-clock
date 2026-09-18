@@ -9,6 +9,7 @@ mod wifi;
 
 use std::process::ExitCode;
 
+use alarm_core::Alarm;
 use esp_idf_svc::{hal::peripherals::Peripherals, nvs::EspDefaultNvsPartition};
 
 use crate::{error::Result, storage::Storage, wifi::Wifi};
@@ -37,8 +38,16 @@ fn run() -> Result<()> {
     let storage = Storage::new(nvs.clone())?;
     let alarms = storage.alarms()?;
     log::info!("There are {} alarms", alarms.len());
-    for alarm in alarms {
+    for alarm in &alarms {
         log::info!("Alarm: {alarm:?}");
+    }
+    if alarms.is_empty() {
+        storage.set_alarms(vec![
+            Alarm::new(11, 10, true),
+            Alarm::new(15, 15, false),
+            Alarm::new(11, 15, false),
+            Alarm::new(16, 15, false),
+        ])?;
     }
 
     let wifi = option_env!("WIFI_SSID")
