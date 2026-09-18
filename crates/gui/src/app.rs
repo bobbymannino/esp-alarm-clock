@@ -1,28 +1,6 @@
-use gpui_kit::{
-    Size,
-    component::{button::*, *},
-    *,
-};
+use gpui_kit::{Size, component::Root, *};
 
-pub struct MyApp;
-
-impl Render for MyApp {
-    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        div()
-            .v_flex()
-            .gap_2()
-            .size_full()
-            .items_center()
-            .justify_center()
-            .child("Hello, World!")
-            .child(
-                Button::new("ok")
-                    .primary()
-                    .label("Let's Go!")
-                    .on_click(|_, _, _| println!("Clicked!")),
-            )
-    }
-}
+use crate::main_window::MainWindow;
 
 fn window_options(cx: &mut App) -> WindowOptions {
     WindowOptions {
@@ -56,7 +34,7 @@ pub fn run() {
 
         cx.spawn(async move |cx| {
             cx.open_window(window_options, |window, cx| {
-                let view = cx.new(|_| MyApp);
+                let view = cx.new(|_| MainWindow);
                 // This first level on the window, should be a Root.
                 cx.new(|cx| Root::new(view, window, cx))
             })
