@@ -19,7 +19,7 @@ panic = "abort"
 strip = true
 
 [workspace]
-members = ["crates/alarm-core"]
+members = ["crates/alarm-core", "crates/gui"]
 
 [dependencies]
 alarm-core = { path = "crates/alarm-core" }
