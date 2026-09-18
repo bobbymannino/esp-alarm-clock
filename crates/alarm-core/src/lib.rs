@@ -147,4 +147,52 @@ mod tests {
         let alarm = Alarm::from_bytes(bytes);
         assert_eq!(alarm.minute, 59);
     }
+
+    #[test]
+    fn test_alarm_from_bytes_enabled_07_30() {
+        let bytes = [&0b1_00111_01, &0b1110_0000];
+        let alarm = Alarm::from_bytes(bytes);
+        assert!(alarm.enabled);
+        assert_eq!(alarm.hour, 7);
+        assert_eq!(alarm.minute, 30);
+    }
+
+    #[test]
+    fn test_alarm_from_bytes_disabled_23_59() {
+        // Every field at its maximum, with the alarm still off
+        let bytes = [&0b0_10111_11, &0b1011_0000];
+        let alarm = Alarm::from_bytes(bytes);
+        assert!(!alarm.enabled);
+        assert_eq!(alarm.hour, 23);
+        assert_eq!(alarm.minute, 59);
+    }
+
+    #[test]
+    fn test_alarm_from_bytes_enabled_00_00() {
+        // Only the enabled bit is set, so both other fields must read as zero
+        let bytes = [&0b1_00000_00, &u8::MIN];
+        let alarm = Alarm::from_bytes(bytes);
+        assert!(alarm.enabled);
+        assert_eq!(alarm.hour, 0);
+        assert_eq!(alarm.minute, 0);
+    }
+
+    #[test]
+    fn test_alarm_from_bytes_disabled_12_45() {
+        let bytes = [&0b0_01100_10, &0b1101_0000];
+        let alarm = Alarm::from_bytes(bytes);
+        assert!(!alarm.enabled);
+        assert_eq!(alarm.hour, 12);
+        assert_eq!(alarm.minute, 45);
+    }
+
+    #[test]
+    fn test_alarm_from_bytes_enabled_16_00() {
+        // Hour 16 sets the top hour bit, which is where it collides with enabled
+        let bytes = [&0b1_10000_00, &u8::MIN];
+        let alarm = Alarm::from_bytes(bytes);
+        assert!(alarm.enabled);
+        assert_eq!(alarm.hour, 16);
+        assert_eq!(alarm.minute, 0);
+    }
 }
