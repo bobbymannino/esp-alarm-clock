@@ -77,6 +77,16 @@ impl Render for MainWindow {
                             .icon(IconName::Eye)
                             .loading(self.reading_alarms)
                             .on_click(cx.listener(|this, _, _, cx| this.read_alarms(cx))),
+                    )
+                    .child(
+                        Button::new("clear_logs")
+                            .label("Clear Logs")
+                            .disabled(self.reading_alarms)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.logs.update(cx, |state, cx| {
+                                    state.set_value(String::new(), window, cx);
+                                });
+                            })),
                     ),
             )
     }
