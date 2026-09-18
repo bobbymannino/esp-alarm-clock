@@ -7,6 +7,22 @@ pub struct Alarm {
 
 impl Alarm {
     /// Create an [`Alarm`] from 2 bytes.
+    ///
+    /// ```text
+    ///         byte 0                    byte 1
+    ///  7  6  5  4  3  2  1  0    7  6  5  4  3  2  1  0
+    /// +--+--+--+--+--+--+--+--+ +--+--+--+--+--+--+--+--+
+    /// | E| h  h  h  h  h| m  m| | m  m  m  m|  unused   |
+    /// +--+--+--+--+--+--+--+--+ +--+--+--+--+--+--+--+--+
+    /// ```
+    ///
+    /// | Field     | Bits                            | Encoded range |
+    /// |-----------|---------------------------------|---------------|
+    /// | `enabled` | byte 0 `[7]`                    | 0-1           |
+    /// | `hour`    | byte 0 `[6:2]`                  | 0-31, clamped to 23 |
+    /// | `minute`  | byte 0 `[1:0]` (high 2 bits) then byte 1 `[7:4]` (low 4 bits) | 0-63, clamped to 59 |
+    ///
+    /// Byte 1 bits `[3:0]` are unused.
     #[must_use]
     pub fn from_bytes(bytes: [&u8; 2]) -> Self {
         // Moves the first bit up to the least significant bit
@@ -19,7 +35,6 @@ impl Alarm {
             minute: minute.min(59),
             enabled,
         }
-        // todo!("comment with bit table");
         // todo!("is this the most efficient way to bit convert?");
     }
 
