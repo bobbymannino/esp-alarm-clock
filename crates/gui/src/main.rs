@@ -1,4 +1,5 @@
 use gpui_kit::{
+    Size,
     component::{button::*, *},
     *,
 };
@@ -30,8 +31,20 @@ fn main() {
         // This must be called before using any GPUI Component features.
         gpui_kit::init(cx);
 
+        let window_options = WindowOptions {
+            window_min_size: Some(Size::new(Pixels::from(600.0), Pixels::from(600.0))),
+            titlebar: Some(TitlebarOptions {
+                title: Some(SharedString::from("ESP Alarm Clock")),
+                appears_transparent: false,
+                traffic_light_position: None,
+            }),
+            window_bounds: Some(WindowBounds::centered(Size::new(Pixels::from(600.0), Pixels::from(600.0)), cx)),
+            app_id: Some(String::from("esp-alarm-clock")),
+            ..Default::default()
+        };
+
         cx.spawn(async move |cx| {
-            cx.open_window(WindowOptions::default(), |window, cx| {
+            cx.open_window(window_options, |window, cx| {
                 let view = cx.new(|_| HelloWorld);
                 // This first level on the window, should be a Root.
                 cx.new(|cx| Root::new(view, window, cx))
