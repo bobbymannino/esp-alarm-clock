@@ -11,7 +11,7 @@ impl Alarm {
     pub fn from_bytes(bytes: [&u8; 2]) -> Self {
         // Moves the first bit up to the least significant bit
         let enabled = bytes[0] >> 7 == 1;
-        let hour = (bytes[0] >> 3) & 0b1_1111;
+        let hour = (bytes[0] >> 2) & 0b1_1111;
         let minute = (u16::from(bytes[0].clone()) << 8) | u16::from(bytes[1].clone());
         let minute = ((minute >> 4) & 0b0011_1111) as u8;
         Self {
@@ -55,28 +55,28 @@ mod tests {
 
     #[test]
     fn test_alarm_from_bytes_hour_23() {
-        let bytes = [&(23 << 3), &u8::MIN];
+        let bytes = [&(23 << 2), &u8::MIN];
         let alarm = Alarm::from_bytes(bytes);
         assert_eq!(alarm.hour, 23);
     }
 
     #[test]
     fn test_alarm_from_bytes_hour_25() {
-        let bytes = [&(25 << 3), &u8::MIN];
+        let bytes = [&(25 << 2), &u8::MIN];
         let alarm = Alarm::from_bytes(bytes);
         assert_eq!(alarm.hour, 23);
     }
 
     #[test]
     fn test_alarm_from_bytes_hour_12() {
-        let bytes = [&(12 << 3), &u8::MIN];
+        let bytes = [&(12 << 2), &u8::MIN];
         let alarm = Alarm::from_bytes(bytes);
         assert_eq!(alarm.hour, 12);
     }
 
     #[test]
     fn test_alarm_from_bytes_hour_1() {
-        let bytes = [&(1 << 3), &u8::MIN];
+        let bytes = [&(1 << 2), &u8::MIN];
         let alarm = Alarm::from_bytes(bytes);
         assert_eq!(alarm.hour, 1);
     }
