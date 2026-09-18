@@ -36,7 +36,7 @@ pub fn run() {
 
         cx.spawn(async move |cx| {
             cx.open_window(window_options, |window, cx| {
-                let view = cx.new(|_| MainWindow);
+                let view = cx.new(|_| MainWindow::default());
                 // This first level on the window, should be a Root.
                 cx.new(|cx| Root::new(view, window, cx))
             })
