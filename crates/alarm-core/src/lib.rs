@@ -275,4 +275,60 @@ mod tests {
         let bytes = alarm.to_bytes();
         assert_eq!(bytes, [0b1_10111_11, 0b1011_0000]);
     }
+
+    #[test]
+    #[allow(clippy::unusual_byte_groupings)]
+    fn test_alarm_to_bytes_enabled_07_30() {
+        // A minute that spans both bytes, with a non-zero hour either side of it
+        let alarm = Alarm {
+            enabled: true,
+            hour: 7,
+            minute: 30,
+        };
+        let bytes = alarm.to_bytes();
+        assert_eq!(bytes, [0b1_00111_01, 0b1110_0000]);
+    }
+
+    #[test]
+    #[allow(clippy::unusual_byte_groupings)]
+    fn test_alarm_to_bytes_minute_15_stays_in_second_byte() {
+        // The largest minute that leaves byte 0's low 2 bits clear
+        let alarm = Alarm {
+            enabled: false,
+            hour: 0,
+            minute: 15,
+        };
+        let bytes = alarm.to_bytes();
+        assert_eq!(bytes, [0b0_00000_00, 0b1111_0000]);
+    }
+
+    #[test]
+    #[allow(clippy::unusual_byte_groupings)]
+    fn test_alarm_to_bytes_minute_16_spills_into_first_byte() {
+        // The smallest minute that sets a bit in byte 0
+        let alarm = Alarm {
+            enabled: false,
+            hour: 0,
+            minute: 16,
+        };
+        let bytes = alarm.to_bytes();
+        assert_eq!(bytes, [0b0_00000_01, 0b0000_0000]);
+    }
+
+    #[test]
+    fn test_alarm_to_bytes_round_trips_through_from_bytes() {
+        for enabled in [false, true] {
+            for hour in 0..=23_u8 {
+                for minute in 0..=59_u8 {
+                    let alarm = Alarm { hour, minute, enabled };
+                    let [first, second] = alarm.to_bytes();
+                    let decoded = Alarm::from_bytes([&first, &second]);
+
+                    assert_eq!(decoded.enabled, enabled);
+                    assert_eq!(decoded.hour, hour);
+                    assert_eq!(decoded.minute, minute);
+                }
+            }
+        }
+    }
 }
