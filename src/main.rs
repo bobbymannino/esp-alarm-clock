@@ -35,7 +35,9 @@ fn run() -> Result<()> {
 
     let nvs = EspDefaultNvsPartition::take()?;
     let storage = Storage::new(nvs.clone())?;
-    for alarm in storage.alarms()? {
+    let alarms = storage.alarms()?;
+    log::info!("There are {} alarms", alarms.len());
+    for alarm in alarms {
         log::info!("Alarm: {alarm:?}");
     }
 

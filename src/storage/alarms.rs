@@ -22,7 +22,7 @@ impl Store<Self> for Alarm {
         let mut buf = [0u8; ALARM_SIZE * MAX_ALARMS];
 
         let Some(blob) = storage.get_blob(Self::LIST_KEY, &mut buf)? else {
-            return Err(Error::MemoryCorruption);
+            return Ok(Vec::new());
         };
 
         let alarms = blob
