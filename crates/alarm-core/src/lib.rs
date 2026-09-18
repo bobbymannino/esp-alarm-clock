@@ -28,14 +28,13 @@ impl Alarm {
         // Moves the first bit up to the least significant bit
         let enabled = bytes[0] >> 7 == 1;
         let hour = (bytes[0] >> 2) & 0b1_1111;
-        let minute = (u16::from(bytes[0].clone()) << 8) | u16::from(bytes[1].clone());
-        let minute = ((minute >> 4) & 0b0011_1111) as u8;
+        // last 2 bits of first byte and first 4 bits of second byte
+        let minute = (bytes[0] << 6 >> 2) | (bytes[1] >> 4);
         Self {
             hour: hour.min(23),
             minute: minute.min(59),
             enabled,
         }
-        // todo!("is this the most efficient way to bit convert?");
     }
 
     /// Turn an [`Alarm`] into a 2 byte array for storing.
