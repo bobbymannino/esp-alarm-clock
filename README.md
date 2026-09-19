@@ -2,6 +2,19 @@
 
 A simple alarm clock written in Rust using an ESP32.
 
+## Usage
+
+```sh
+# Flash the ESP with the firmware
+cargo run
+
+# Run the GUI interface for reading/settings alarms
+cargo g
+
+# Run the unit tests
+cargo t
+```
+
 ## Useful Commands
 
 ```sh
