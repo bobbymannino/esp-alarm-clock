@@ -24,6 +24,7 @@ pub fn run() {
         gpui_kit::init(cx);
 
         crate::actions::init(cx);
+        cx.activate(true);
 
         cx.on_window_closed(|cx, _| {
             if cx.windows().is_empty() {
@@ -36,6 +37,7 @@ pub fn run() {
 
         cx.spawn(async move |cx| {
             cx.open_window(window_options, |window, cx| {
+                window.activate_window();
                 let view = cx.new(|cx| MainWindow::new(window, cx));
                 // This first level on the window, should be a Root.
                 cx.new(|cx| Root::new(view, window, cx))
