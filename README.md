@@ -24,5 +24,15 @@ espflash partition-table pt.bin
 # espflash read-flash <address> <size> <file>
 espflash read-flash 0x9000 0x6000 nvs.bin
 
+# Shows a simple hex/ascii dump of the NVS
+hexdump -C nvs.bin
+
+# Pipe to less for quick search
+hexdump -C nvs.bin | less
+
+# Print all readable strings in the NVS
+strings nvs.bin
+
+# Shows a more detailed view of the NVS
 .embuild/espressif/esp-idf/v5.5.4/components/nvs_flash/nvs_partition_tool/nvs_tool.py [-d written] nvs.bin
 ```
