@@ -4,7 +4,7 @@ use gpui_kit::{
     component::{
         ActiveTheme as _,
         button::{Button, ButtonVariants},
-        input::{Input, Textarea},
+        input::{Input, InputState, Textarea},
         label::Label,
         scroll::ScrollableElement,
         tooltip::Tooltip,
@@ -13,6 +13,24 @@ use gpui_kit::{
 };
 
 use super::MainWindow;
+
+fn flash_input(
+    id: &'static str,
+    tooltip: &'static str,
+    label: &'static str,
+    input: &Entity<InputState>,
+    disabled: bool,
+) -> impl IntoElement {
+    div()
+        .id(id)
+        .tooltip(move |window, cx| Tooltip::new(tooltip).build(window, cx))
+        .flex()
+        .flex_col()
+        .gap_1()
+        .w_48()
+        .child(Label::new(label))
+        .child(Input::new(input).disabled(disabled))
+}
 
 impl Render for MainWindow {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -29,28 +47,20 @@ impl Render for MainWindow {
                 div()
                     .flex()
                     .gap_4()
-                    .child(
-                        div()
-                            .id("flash-address-input")
-                            .tooltip(|window, cx| Tooltip::new("Start address to read, in hexadecimal").build(window, cx))
-                            .flex()
-                            .flex_col()
-                            .gap_1()
-                            .w_48()
-                            .child(Label::new("Flash address"))
-                            .child(Input::new(&self.flash_address).disabled(self.is_reading_flash)),
-                    )
-                    .child(
-                        div()
-                            .id("flash-size-input")
-                            .tooltip(|window, cx| Tooltip::new("Number of bytes to read, in hexadecimal").build(window, cx))
-                            .flex()
-                            .flex_col()
-                            .gap_1()
-                            .w_48()
-                            .child(Label::new("Flash size"))
-                            .child(Input::new(&self.flash_size).disabled(self.is_reading_flash)),
-                    ),
+                    .child(flash_input(
+                        "flash-address-input",
+                        "Start address to read, in hexadecimal",
+                        "Flash address",
+                        &self.flash_address,
+                        self.is_reading_flash,
+                    ))
+                    .child(flash_input(
+                        "flash-size-input",
+                        "Number of bytes to read, in hexadecimal",
+                        "Flash size",
+                        &self.flash_size,
+                        self.is_reading_flash,
+                    )),
             )
             .child(
                 Textarea::new(&self.logs)
