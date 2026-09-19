@@ -22,7 +22,7 @@ impl FlashRead {
 }
 
 /// How many bytes are read from the child's pipes at a time.
-const CHUNK_SIZE: usize = 1024;
+const CHUNK_SIZE: usize = 8 * 1024;
 
 pub(super) fn parse_hex(value: &str) -> Option<u32> {
     let digits = value.strip_prefix("0x")?;

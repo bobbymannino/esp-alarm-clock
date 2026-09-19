@@ -2,9 +2,14 @@ mod flash;
 mod logs;
 mod view;
 
-use futures::{StreamExt as _, channel::mpsc};
+use std::time::Duration;
+
+use futures::{FutureExt as _, StreamExt as _, channel::mpsc};
 use gpui_kit::{component::input::InputState, *};
 use logs::Logs;
+
+/// How long child output is collected before updating the log textarea.
+const LOG_BATCH_INTERVAL: Duration = Duration::from_millis(16);
 
 pub struct MainWindow {
     /// Whether a flash read is currently in flight.
@@ -67,8 +72,26 @@ impl MainWindow {
         cx.spawn(async move |this, cx| {
             let read = cx.background_executor().spawn(async move { flash::read(flash_read, &sender) });
 
-            while let Some(chunk) = receiver.next().await {
-                this.update_in(cx, |this, window, cx| this.logs.append(&chunk, window, cx)).ok();
+            while let Some(mut batch) = receiver.next().await {
+                cx.background_executor().timer(LOG_BATCH_INTERVAL).await;
+
+                let mut channel_open = true;
+                loop {
+                    match receiver.next().now_or_never() {
+                        Some(Some(chunk)) => batch.push_str(&chunk),
+                        Some(None) => {
+                            channel_open = false;
+                            break;
+                        }
+                        None => break,
+                    }
+                }
+
+                this.update_in(cx, |this, window, cx| this.logs.append(&batch, window, cx)).ok();
+
+                if !channel_open {
+                    break;
+                }
             }
 
             let result = read.await;
