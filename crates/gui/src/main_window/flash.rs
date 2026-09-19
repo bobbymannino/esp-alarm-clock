@@ -4,7 +4,7 @@ use std::{
     thread,
 };
 
-use anyhow::{Result, bail};
+use anyhow::{Result, anyhow, bail};
 use futures::channel::mpsc;
 use regex::Regex;
 
@@ -43,7 +43,7 @@ pub(super) fn read(flash_address: &str, flash_size: &str, sender: &mpsc::Unbound
     let stderr_sender = sender.clone();
     let stderr_reader = thread::spawn(move || forward(stderr, &stderr_sender));
     forward(stdout, sender);
-    stderr_reader.join().ok();
+    stderr_reader.join().map_err(|_| anyhow!("stderr reader thread panicked"))?;
 
     let status = child.wait()?;
     if !status.success() {
