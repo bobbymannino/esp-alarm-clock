@@ -9,7 +9,7 @@ use gpui_kit::{
 
 pub struct MainWindow {
     /// Whether a flash read is currently in flight.
-    is_reading_alarms: bool,
+    is_reading_flash: bool,
     /// The flash address passed to `espflash read-flash`.
     flash_address: Entity<InputState>,
     /// The number of bytes passed to `espflash read-flash`.
@@ -23,7 +23,7 @@ pub struct MainWindow {
 impl MainWindow {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         Self {
-            is_reading_alarms: false,
+            is_reading_flash: false,
             flash_address: cx.new(|cx| InputState::new(window, cx).default_value(flash::DEFAULT_ADDRESS)),
             flash_size: cx.new(|cx| InputState::new(window, cx).default_value(flash::DEFAULT_SIZE)),
             logs: cx.new(|cx| TextareaState::new(window, cx).placeholder("Logs")),
@@ -32,7 +32,7 @@ impl MainWindow {
     }
 
     fn read_alarms(&mut self, cx: &mut Context<Self>, window: &mut Window) {
-        if self.is_reading_alarms {
+        if self.is_reading_flash {
             return;
         }
 
@@ -60,8 +60,8 @@ impl MainWindow {
 
         let flash_read = flash::FlashRead::new(flash_address, flash_size);
 
-        self.is_reading_alarms = true;
-        self.log_text.clear();
+        self.is_reading_flash = true;
+        self.clear_logs(window, cx);
         cx.notify();
 
         // The child runs on a background thread, so its output comes back over a
@@ -82,7 +82,7 @@ impl MainWindow {
                     this.append_logs(&format!("\n{error:#}\n"), window, cx);
                 }
 
-                this.is_reading_alarms = false;
+                this.is_reading_flash = false;
                 cx.notify();
             })
             .ok();
@@ -91,10 +91,17 @@ impl MainWindow {
     }
 
     fn show_validation_error(&mut self, message: &str, input: &Entity<InputState>, window: &mut Window, cx: &mut Context<Self>) {
-        self.logs.update(cx, |logs, cx| {
-            logs.set_value(message, window, cx);
-        });
+        self.set_logs(message.to_owned(), window, cx);
         input.focus_handle(cx).focus(window, cx);
+    }
+
+    fn set_logs(&mut self, text: String, window: &mut Window, cx: &mut Context<Self>) {
+        self.log_text = text;
+        self.sync_log_textarea(window, cx);
+    }
+
+    fn clear_logs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.set_logs(String::new(), window, cx);
     }
 
     /// Appends a chunk of child output to the log textarea.
@@ -115,6 +122,10 @@ impl MainWindow {
             self.log_text.push_str(part);
         }
 
+        self.sync_log_textarea(window, cx);
+    }
+
+    fn sync_log_textarea(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let text = self.log_text.clone();
         self.logs.update(cx, |state, cx| {
             state.set_value(text, window, cx);
