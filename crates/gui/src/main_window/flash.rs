@@ -1,4 +1,5 @@
 use std::{
+    io::{self, Read},
     process::{Command, Stdio},
     sync::LazyLock,
     thread,
@@ -42,8 +43,10 @@ pub(super) fn read(flash_address: &str, flash_size: &str, sender: &mpsc::Unbound
     // and blocks the child. espflash draws its progress bar on stderr.
     let stderr_sender = sender.clone();
     let stderr_reader = thread::spawn(move || forward(stderr, &stderr_sender));
-    forward(stdout, sender);
-    stderr_reader.join().map_err(|_| anyhow!("stderr reader thread panicked"))?;
+    let stdout_result = forward(stdout, sender);
+    let stderr_result = stderr_reader.join().map_err(|_| anyhow!("stderr reader thread panicked"))?;
+    stdout_result?;
+    stderr_result?;
 
     let status = child.wait()?;
     if !status.success() {
@@ -54,10 +57,11 @@ pub(super) fn read(flash_address: &str, flash_size: &str, sender: &mpsc::Unbound
 }
 
 /// Forwards everything `reader` produces to `sender`, a chunk at a time.
-fn forward(mut reader: impl std::io::Read, sender: &mpsc::UnboundedSender<String>) {
+fn forward(mut reader: impl Read, sender: &mpsc::UnboundedSender<String>) -> io::Result<()> {
     let mut buf = [0_u8; CHUNK_SIZE];
 
-    while let Ok(read) = reader.read(&mut buf) {
+    loop {
+        let read = reader.read(&mut buf)?;
         if read == 0 {
             break;
         }
@@ -67,6 +71,8 @@ fn forward(mut reader: impl std::io::Read, sender: &mpsc::UnboundedSender<String
             break;
         }
     }
+
+    Ok(())
 }
 
 #[cfg(test)]
