@@ -1,26 +1,11 @@
-use std::{
-    process::{Command, Stdio},
-    thread,
-};
+mod flash;
+mod view;
 
-use anyhow::{Result, bail};
 use futures::{StreamExt as _, channel::mpsc};
 use gpui_kit::{
-    assets::IconName,
-    base::Disableable,
-    component::{
-        ActiveTheme as _,
-        button::{Button, ButtonVariants},
-        input::{Input, InputState, Textarea, TextareaState},
-        label::Label,
-        scroll::ScrollableElement,
-        tooltip::Tooltip,
-    },
+    component::input::{InputState, TextareaState},
     *,
 };
-
-/// How many bytes are read from the child's pipes at a time.
-const CHUNK_SIZE: usize = 1024;
 
 pub struct MainWindow {
     /// Whether a flash read is currently in flight.
@@ -39,8 +24,8 @@ impl MainWindow {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         Self {
             reading_alarms: false,
-            flash_address: cx.new(|cx| InputState::new(window, cx).default_value("0x9000")),
-            flash_size: cx.new(|cx| InputState::new(window, cx).default_value("0x6000")),
+            flash_address: cx.new(|cx| InputState::new(window, cx).default_value(flash::DEFAULT_ADDRESS)),
+            flash_size: cx.new(|cx| InputState::new(window, cx).default_value(flash::DEFAULT_SIZE)),
             logs: cx.new(|cx| TextareaState::new(window, cx).placeholder("Logs")),
             log_text: String::new(),
         }
@@ -53,24 +38,29 @@ impl MainWindow {
 
         self.reading_alarms = true;
         self.log_text.clear();
+
         let flash_address = self.flash_address.read(cx).value().to_string();
-        if !regex::regex!(r"^0x[0-9a-f]+").is_match(&flash_address) {
-            self.logs.update(cx, |logs, cx| {
-                logs.set_value("Flash address must start with \"0x\" and be valid hex", window, cx);
-            });
-            self.reading_alarms = false;
-            self.flash_address.focus_handle(cx).focus(window, cx);
+        if !flash::is_valid_hex(&flash_address) {
+            self.show_validation_error(
+                "Flash address must start with \"0x\" and be valid hex",
+                &self.flash_address.clone(),
+                window,
+                cx,
+            );
             return;
         }
+
         let flash_size = self.flash_size.read(cx).value().to_string();
-        if !regex::regex!(r"^0x[0-9a-f]+").is_match(&flash_size) {
-            self.logs.update(cx, |logs, cx| {
-                logs.set_value("Flash size must start with \"0x\" and be valid hex", window, cx);
-            });
-            self.reading_alarms = false;
-            self.flash_size.focus_handle(cx).focus(window, cx);
+        if !flash::is_valid_hex(&flash_size) {
+            self.show_validation_error(
+                "Flash size must start with \"0x\" and be valid hex",
+                &self.flash_size.clone(),
+                window,
+                cx,
+            );
             return;
         }
+
         cx.notify();
 
         // The child runs on a background thread, so its output comes back over a
@@ -80,7 +70,7 @@ impl MainWindow {
         cx.spawn(async move |this, cx| {
             let read = cx
                 .background_executor()
-                .spawn(async move { read_flash(&flash_address, &flash_size, &sender) });
+                .spawn(async move { flash::read(&flash_address, &flash_size, &sender) });
 
             while let Some(chunk) = receiver.next().await {
                 this.update_in(cx, |this, window, cx| this.append_logs(&chunk, window, cx)).ok();
@@ -99,6 +89,14 @@ impl MainWindow {
             .ok();
         })
         .detach();
+    }
+
+    fn show_validation_error(&mut self, message: &str, input: &Entity<InputState>, window: &mut Window, cx: &mut Context<Self>) {
+        self.logs.update(cx, |logs, cx| {
+            logs.set_value(message, window, cx);
+        });
+        self.reading_alarms = false;
+        input.focus_handle(cx).focus(window, cx);
     }
 
     /// Appends a chunk of child output to the log textarea.
@@ -126,127 +124,5 @@ impl MainWindow {
             let end = state.value().len();
             state.set_selected_range(end..end, cx);
         });
-    }
-}
-
-impl Render for MainWindow {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let theme = cx.theme();
-
-        div()
-            .overflow_y_scrollbar()
-            .flex()
-            .flex_col()
-            .p_5()
-            .gap_5()
-            .child(Label::new("ESP Alarm Clock").font_weight(FontWeight::BOLD).text_3xl())
-            .child(
-                div()
-                    .flex()
-                    .gap_4()
-                    .child(
-                        div()
-                            .id("flash-address-input")
-                            .tooltip(|window, cx| Tooltip::new("Start address to read, in hexadecimal").build(window, cx))
-                            .flex()
-                            .flex_col()
-                            .gap_1()
-                            .w_48()
-                            .child(Label::new("Flash address"))
-                            .child(Input::new(&self.flash_address).disabled(self.reading_alarms)),
-                    )
-                    .child(
-                        div()
-                            .id("flash-size-input")
-                            .tooltip(|window, cx| Tooltip::new("Number of bytes to read, in hexadecimal").build(window, cx))
-                            .flex()
-                            .flex_col()
-                            .gap_1()
-                            .w_48()
-                            .child(Label::new("Flash size"))
-                            .child(Input::new(&self.flash_size).disabled(self.reading_alarms)),
-                    ),
-            )
-            .child(
-                Textarea::new(&self.logs)
-                    .h_96()
-                    .border_2()
-                    .border_color(theme.border)
-                    .rounded_lg()
-                    .readonly(true),
-            )
-            .child(
-                div()
-                    .flex()
-                    .gap_2()
-                    .child(Button::new("close").label("Close").on_click(|_, window, _| window.remove_window()))
-                    .child(
-                        Button::new("read_alarms")
-                            .primary()
-                            .label("Read Alarms")
-                            .icon(IconName::Eye)
-                            .loading(self.reading_alarms)
-                            .on_click(cx.listener(|this, _, window, cx| this.read_alarms(cx, window))),
-                    )
-                    .child(
-                        Button::new("clear_logs")
-                            .label("Clear Logs")
-                            .disabled(self.reading_alarms)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.logs.update(cx, |state, cx| {
-                                    state.set_value(String::new(), window, cx);
-                                });
-                            })),
-                    ),
-            )
-    }
-}
-
-/// Runs `espflash read-flash` for the NVS partition, forwarding everything it
-/// writes to `sender` as it is produced.
-///
-/// Blocking, so this must not be called on the main thread.
-fn read_flash(flash_address: &str, flash_size: &str, sender: &mpsc::UnboundedSender<String>) -> Result<()> {
-    let nvs_path = std::env::temp_dir().join("nvs.bin");
-
-    let mut child = Command::new("espflash")
-        .args(["read-flash", flash_address, flash_size])
-        .arg(nvs_path)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
-
-    let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
-        bail!("espflash stdout/stderr were not piped");
-    };
-
-    // Both pipes need their own reader, a pipe nobody drains fills its buffer
-    // and blocks the child. espflash draws its progress bar on stderr.
-    let stderr_sender = sender.clone();
-    let stderr_reader = thread::spawn(move || forward(stderr, &stderr_sender));
-    forward(stdout, sender);
-    stderr_reader.join().ok();
-
-    let status = child.wait()?;
-    if !status.success() {
-        bail!("espflash exited with {status}");
-    }
-
-    Ok(())
-}
-
-/// Forwards everything `reader` produces to `sender`, a chunk at a time.
-fn forward(mut reader: impl std::io::Read, sender: &mpsc::UnboundedSender<String>) {
-    let mut buf = [0u8; CHUNK_SIZE];
-
-    while let Ok(read) = reader.read(&mut buf) {
-        if read == 0 {
-            break;
-        }
-
-        let chunk = String::from_utf8_lossy(buf.get(..read).unwrap_or_default()).into_owned();
-        if sender.unbounded_send(chunk).is_err() {
-            break;
-        }
     }
 }
