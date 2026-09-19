@@ -1,13 +1,11 @@
 use std::{
     io::{self, Read},
     process::{Command, Stdio},
-    sync::LazyLock,
     thread,
 };
 
 use anyhow::{Result, anyhow, bail};
 use futures::channel::mpsc;
-use regex::Regex;
 
 pub(super) const DEFAULT_ADDRESS: &str = "0x9000";
 pub(super) const DEFAULT_SIZE: &str = "0x6000";
@@ -15,21 +13,22 @@ pub(super) const DEFAULT_SIZE: &str = "0x6000";
 /// How many bytes are read from the child's pipes at a time.
 const CHUNK_SIZE: usize = 1024;
 
-static HEX_REGEX: LazyLock<Result<Regex, regex::Error>> = LazyLock::new(|| Regex::new(r"^0x[0-9a-f]+$"));
-
-pub(super) fn is_valid_hex(value: &str) -> bool {
-    HEX_REGEX.as_ref().is_ok_and(|regex| regex.is_match(value))
+pub(super) fn parse_hex(value: &str) -> Option<u32> {
+    let digits = value.strip_prefix("0x")?;
+    u32::from_str_radix(digits, 16).ok()
 }
 
 /// Runs `espflash read-flash`, forwarding everything it writes to `sender` as
 /// it is produced.
 ///
 /// Blocking, so this must not be called on the main thread.
-pub(super) fn read(flash_address: &str, flash_size: &str, sender: &mpsc::UnboundedSender<String>) -> Result<()> {
+pub(super) fn read(flash_address: u32, flash_size: u32, sender: &mpsc::UnboundedSender<String>) -> Result<()> {
     let output_path = std::env::temp_dir().join("nvs.bin");
 
     let mut child = Command::new("espflash")
-        .args(["read-flash", flash_address, flash_size])
+        .arg("read-flash")
+        .arg(format!("{flash_address:#x}"))
+        .arg(format!("{flash_size:#x}"))
         .arg(output_path)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -80,20 +79,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_hex_regex_valid() {
-        let hex = "0x123abc";
-        assert!(is_valid_hex(hex));
+    fn test_parse_hex_valid() {
+        assert_eq!(parse_hex("0x123abc"), Some(0x123ABC));
     }
 
     #[test]
-    fn test_hex_regex_starts_without_0x() {
-        let hex = "123abc";
-        assert!(!is_valid_hex(hex));
+    fn test_parse_hex_starts_without_0x() {
+        assert_eq!(parse_hex("123abc"), None);
     }
 
     #[test]
-    fn test_hex_regex_invalid_character() {
-        let hex = "0x1g";
-        assert!(!is_valid_hex(hex));
+    fn test_parse_hex_invalid_character() {
+        assert_eq!(parse_hex("0x1g"), None);
+    }
+
+    #[test]
+    fn test_parse_hex_overflow() {
+        assert_eq!(parse_hex("0x100000000"), None);
     }
 }

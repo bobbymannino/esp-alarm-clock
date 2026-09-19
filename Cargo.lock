@@ -3344,7 +3344,6 @@ dependencies = [
  "anyhow",
  "futures",
  "gpui-kit",
- "regex",
 ]
 
 [[package]]

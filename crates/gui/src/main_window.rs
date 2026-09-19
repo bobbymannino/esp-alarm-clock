@@ -37,26 +37,26 @@ impl MainWindow {
         }
 
         let flash_address = self.flash_address.read(cx).value().to_string();
-        if !flash::is_valid_hex(&flash_address) {
+        let Some(flash_address) = flash::parse_hex(&flash_address) else {
             self.show_validation_error(
-                "Flash address must start with \"0x\" and be valid hex",
+                "Flash address must start with \"0x\" and fit in 32-bit hex",
                 &self.flash_address.clone(),
                 window,
                 cx,
             );
             return;
-        }
+        };
 
         let flash_size = self.flash_size.read(cx).value().to_string();
-        if !flash::is_valid_hex(&flash_size) {
+        let Some(flash_size) = flash::parse_hex(&flash_size) else {
             self.show_validation_error(
-                "Flash size must start with \"0x\" and be valid hex",
+                "Flash size must start with \"0x\" and fit in 32-bit hex",
                 &self.flash_size.clone(),
                 window,
                 cx,
             );
             return;
-        }
+        };
 
         self.is_reading_alarms = true;
         self.log_text.clear();
@@ -69,7 +69,7 @@ impl MainWindow {
         cx.spawn(async move |this, cx| {
             let read = cx
                 .background_executor()
-                .spawn(async move { flash::read(&flash_address, &flash_size, &sender) });
+                .spawn(async move { flash::read(flash_address, flash_size, &sender) });
 
             while let Some(chunk) = receiver.next().await {
                 this.update_in(cx, |this, window, cx| this.append_logs(&chunk, window, cx)).ok();
