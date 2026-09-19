@@ -38,7 +38,7 @@ impl Render for MainWindow {
                             .gap_1()
                             .w_48()
                             .child(Label::new("Flash address"))
-                            .child(Input::new(&self.flash_address).disabled(self.reading_alarms)),
+                            .child(Input::new(&self.flash_address).disabled(self.is_reading_alarms)),
                     )
                     .child(
                         div()
@@ -49,7 +49,7 @@ impl Render for MainWindow {
                             .gap_1()
                             .w_48()
                             .child(Label::new("Flash size"))
-                            .child(Input::new(&self.flash_size).disabled(self.reading_alarms)),
+                            .child(Input::new(&self.flash_size).disabled(self.is_reading_alarms)),
                     ),
             )
             .child(
@@ -70,13 +70,13 @@ impl Render for MainWindow {
                             .primary()
                             .label("Read Alarms")
                             .icon(IconName::Eye)
-                            .loading(self.reading_alarms)
+                            .loading(self.is_reading_alarms)
                             .on_click(cx.listener(|this, _, window, cx| this.read_alarms(cx, window))),
                     )
                     .child(
                         Button::new("clear_logs")
                             .label("Clear Logs")
-                            .disabled(self.reading_alarms)
+                            .disabled(self.is_reading_alarms)
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.logs.update(cx, |state, cx| {
                                     state.set_value(String::new(), window, cx);

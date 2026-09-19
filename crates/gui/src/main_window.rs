@@ -9,7 +9,7 @@ use gpui_kit::{
 
 pub struct MainWindow {
     /// Whether a flash read is currently in flight.
-    reading_alarms: bool,
+    is_reading_alarms: bool,
     /// The flash address passed to `espflash read-flash`.
     flash_address: Entity<InputState>,
     /// The number of bytes passed to `espflash read-flash`.
@@ -23,7 +23,7 @@ pub struct MainWindow {
 impl MainWindow {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         Self {
-            reading_alarms: false,
+            is_reading_alarms: false,
             flash_address: cx.new(|cx| InputState::new(window, cx).default_value(flash::DEFAULT_ADDRESS)),
             flash_size: cx.new(|cx| InputState::new(window, cx).default_value(flash::DEFAULT_SIZE)),
             logs: cx.new(|cx| TextareaState::new(window, cx).placeholder("Logs")),
@@ -32,7 +32,7 @@ impl MainWindow {
     }
 
     fn read_alarms(&mut self, cx: &mut Context<Self>, window: &mut Window) {
-        if self.reading_alarms {
+        if self.is_reading_alarms {
             return;
         }
 
@@ -58,7 +58,7 @@ impl MainWindow {
             return;
         }
 
-        self.reading_alarms = true;
+        self.is_reading_alarms = true;
         self.log_text.clear();
         cx.notify();
 
@@ -82,7 +82,7 @@ impl MainWindow {
                     this.append_logs(&format!("\n{error:#}\n"), window, cx);
                 }
 
-                this.reading_alarms = false;
+                this.is_reading_alarms = false;
                 cx.notify();
             })
             .ok();
