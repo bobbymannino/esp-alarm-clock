@@ -13,13 +13,18 @@ use gpui_kit::{
     *,
 };
 
-#[derive(Default)]
 pub struct MainWindow {
     /// Whether a flash read is currently in flight.
     reading_alarms: bool,
 }
 
 impl MainWindow {
+    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        Self {
+            reading_alarms: false,
+        }
+    }
+
     fn read_alarms(&mut self, cx: &mut Context<Self>) {
         if self.reading_alarms {
             return;
