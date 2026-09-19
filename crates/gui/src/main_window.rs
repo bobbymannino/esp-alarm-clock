@@ -11,9 +11,10 @@ use gpui_kit::{
     component::{
         ActiveTheme as _,
         button::{Button, ButtonVariants},
-        input::{Textarea, TextareaState},
+        input::{Input, InputState, Textarea, TextareaState},
         label::Label,
         scroll::ScrollableElement,
+        tooltip::Tooltip,
     },
     *,
 };
@@ -24,6 +25,10 @@ const CHUNK_SIZE: usize = 1024;
 pub struct MainWindow {
     /// Whether a flash read is currently in flight.
     reading_alarms: bool,
+    /// The flash address passed to `espflash read-flash`.
+    flash_address: Entity<InputState>,
+    /// The number of bytes passed to `espflash read-flash`.
+    flash_size: Entity<InputState>,
     /// The log textarea, kept across renders so its contents survive a repaint.
     logs: Entity<TextareaState>,
     /// Everything the child process has written so far.
@@ -34,6 +39,8 @@ impl MainWindow {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         Self {
             reading_alarms: false,
+            flash_address: cx.new(|cx| InputState::new(window, cx).default_value("0x9000")),
+            flash_size: cx.new(|cx| InputState::new(window, cx).default_value("0x6000")),
             logs: cx.new(|cx| TextareaState::new(window, cx).placeholder("Logs")),
             log_text: String::new(),
         }
@@ -46,6 +53,8 @@ impl MainWindow {
 
         self.reading_alarms = true;
         self.log_text.clear();
+        let flash_address = self.flash_address.read(cx).value().to_string();
+        let flash_size = self.flash_size.read(cx).value().to_string();
         cx.notify();
 
         // The child runs on a background thread, so its output comes back over a
@@ -53,7 +62,9 @@ impl MainWindow {
         let (sender, mut receiver) = mpsc::unbounded();
 
         cx.spawn(async move |this, cx| {
-            let read = cx.background_executor().spawn(async move { read_flash(&sender) });
+            let read = cx
+                .background_executor()
+                .spawn(async move { read_flash(&flash_address, &flash_size, &sender) });
 
             while let Some(chunk) = receiver.next().await {
                 this.update_in(cx, |this, window, cx| this.append_logs(&chunk, window, cx)).ok();
@@ -114,6 +125,29 @@ impl Render for MainWindow {
             .gap_5()
             .child(Label::new("ESP Alarm Clock").font_weight(FontWeight::BOLD).text_3xl())
             .child(
+                div()
+                    .flex()
+                    .gap_4()
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .w_48()
+                            .child(Label::new("Flash address"))
+                            .child(Input::new(&self.flash_address).disabled(self.reading_alarms)),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .w_48()
+                            .child(Label::new("Flash size"))
+                            .child(Input::new(&self.flash_size).disabled(self.reading_alarms)),
+                    ),
+            )
+            .child(
                 Textarea::new(&self.logs)
                     .h_96()
                     .border_2()
@@ -152,11 +186,11 @@ impl Render for MainWindow {
 /// writes to `sender` as it is produced.
 ///
 /// Blocking, so this must not be called on the main thread.
-fn read_flash(sender: &mpsc::UnboundedSender<String>) -> Result<()> {
+fn read_flash(flash_address: &str, flash_size: &str, sender: &mpsc::UnboundedSender<String>) -> Result<()> {
     let nvs_path = std::env::temp_dir().join("nvs.bin");
 
     let mut child = Command::new("espflash")
-        .args(["read-flash", "0x9000", "0x6000"])
+        .args(["read-flash", flash_address, flash_size])
         .arg(nvs_path)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
