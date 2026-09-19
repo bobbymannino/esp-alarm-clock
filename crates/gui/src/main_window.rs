@@ -10,6 +10,8 @@ use logs::Logs;
 
 /// How long child output is collected before updating the log textarea.
 const LOG_BATCH_INTERVAL: Duration = Duration::from_millis(16);
+/// Maximum number of child-output chunks waiting for the UI.
+const LOG_CHANNEL_CAPACITY: usize = 32;
 
 pub struct MainWindow {
     /// Whether a flash read is currently in flight.
@@ -65,12 +67,12 @@ impl MainWindow {
         self.clear_logs(window, cx);
         cx.notify();
 
-        // The child runs on a background thread, so its output comes back over a
-        // channel that this foreground task drains as it arrives.
-        let (sender, mut receiver) = mpsc::unbounded();
+        // Bound queued output so slow UI updates apply backpressure to the pipe
+        // readers instead of allowing child output to consume unlimited memory.
+        let (sender, mut receiver) = mpsc::channel(LOG_CHANNEL_CAPACITY);
 
         cx.spawn(async move |this, cx| {
-            let read = cx.background_executor().spawn(async move { flash::read(flash_read, &sender) });
+            let read = cx.background_executor().spawn(async move { flash::read(flash_read, sender) });
 
             while let Some(mut batch) = receiver.next().await {
                 cx.background_executor().timer(LOG_BATCH_INTERVAL).await;

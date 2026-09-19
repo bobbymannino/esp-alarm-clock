@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::{Result, anyhow, bail};
-use futures::channel::mpsc;
+use futures::{SinkExt as _, channel::mpsc, executor::block_on};
 
 pub(super) const DEFAULT_ADDRESS: &str = "0x9000";
 pub(super) const DEFAULT_SIZE: &str = "0x6000";
@@ -33,7 +33,7 @@ pub(super) fn parse_hex(value: &str) -> Option<u32> {
 /// it is produced.
 ///
 /// Blocking, so this must not be called on the main thread.
-pub(super) fn read(request: FlashRead, sender: &mpsc::UnboundedSender<String>) -> Result<()> {
+pub(super) fn read(request: FlashRead, mut sender: mpsc::Sender<String>) -> Result<()> {
     let output_dir = tempfile::Builder::new().prefix("esp-alarm-clock-").tempdir()?;
     let output_path = output_dir.path().join("nvs.bin");
 
@@ -52,9 +52,9 @@ pub(super) fn read(request: FlashRead, sender: &mpsc::UnboundedSender<String>) -
 
     // Both pipes need their own reader, a pipe nobody drains fills its buffer
     // and blocks the child. espflash draws its progress bar on stderr.
-    let stderr_sender = sender.clone();
-    let stderr_reader = thread::spawn(move || forward(stderr, &stderr_sender));
-    let stdout_result = forward(stdout, sender);
+    let mut stderr_sender = sender.clone();
+    let stderr_reader = thread::spawn(move || forward(stderr, &mut stderr_sender));
+    let stdout_result = forward(stdout, &mut sender);
     let stderr_result = stderr_reader.join().map_err(|_| anyhow!("stderr reader thread panicked"))?;
     stdout_result?;
     stderr_result?;
@@ -122,7 +122,7 @@ impl Utf8LossyDecoder {
 }
 
 /// Forwards everything `reader` produces to `sender`, a chunk at a time.
-fn forward(mut reader: impl Read, sender: &mpsc::UnboundedSender<String>) -> io::Result<()> {
+fn forward(mut reader: impl Read, sender: &mut mpsc::Sender<String>) -> io::Result<()> {
     let mut buf = [0_u8; CHUNK_SIZE];
     let mut decoder = Utf8LossyDecoder::default();
 
@@ -133,14 +133,14 @@ fn forward(mut reader: impl Read, sender: &mpsc::UnboundedSender<String>) -> io:
         }
 
         let chunk = decoder.push(buf.get(..read).unwrap_or_default());
-        if !chunk.is_empty() && sender.unbounded_send(chunk).is_err() {
+        if !chunk.is_empty() && block_on(sender.send(chunk)).is_err() {
             return Ok(());
         }
     }
 
     let chunk = decoder.finish();
     if !chunk.is_empty() {
-        _ = sender.unbounded_send(chunk);
+        _ = block_on(sender.send(chunk));
     }
 
     Ok(())
