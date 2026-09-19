@@ -67,9 +67,64 @@ pub(super) fn read(request: FlashRead, sender: &mpsc::UnboundedSender<String>) -
     Ok(())
 }
 
+#[derive(Default)]
+struct Utf8LossyDecoder {
+    pending: Vec<u8>,
+}
+
+impl Utf8LossyDecoder {
+    fn push(&mut self, bytes: &[u8]) -> String {
+        self.pending.extend_from_slice(bytes);
+        self.decode(false)
+    }
+
+    fn finish(&mut self) -> String {
+        self.decode(true)
+    }
+
+    fn decode(&mut self, finish: bool) -> String {
+        let mut decoded = String::new();
+        let mut consumed = 0;
+
+        while consumed < self.pending.len() {
+            let Some(remaining) = self.pending.get(consumed..) else {
+                break;
+            };
+
+            match std::str::from_utf8(remaining) {
+                Ok(valid) => {
+                    decoded.push_str(valid);
+                    consumed = self.pending.len();
+                }
+                Err(error) => {
+                    let valid_end = consumed.saturating_add(error.valid_up_to());
+                    if let Some(valid) = self.pending.get(consumed..valid_end) {
+                        decoded.push_str(&String::from_utf8_lossy(valid));
+                    }
+                    consumed = valid_end;
+
+                    if let Some(error_len) = error.error_len() {
+                        decoded.push(char::REPLACEMENT_CHARACTER);
+                        consumed = consumed.saturating_add(error_len).min(self.pending.len());
+                    } else if finish {
+                        decoded.push(char::REPLACEMENT_CHARACTER);
+                        consumed = self.pending.len();
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+
+        self.pending.drain(..consumed);
+        decoded
+    }
+}
+
 /// Forwards everything `reader` produces to `sender`, a chunk at a time.
 fn forward(mut reader: impl Read, sender: &mpsc::UnboundedSender<String>) -> io::Result<()> {
     let mut buf = [0_u8; CHUNK_SIZE];
+    let mut decoder = Utf8LossyDecoder::default();
 
     loop {
         let read = reader.read(&mut buf)?;
@@ -77,10 +132,15 @@ fn forward(mut reader: impl Read, sender: &mpsc::UnboundedSender<String>) -> io:
             break;
         }
 
-        let chunk = String::from_utf8_lossy(buf.get(..read).unwrap_or_default()).into_owned();
-        if sender.unbounded_send(chunk).is_err() {
-            break;
+        let chunk = decoder.push(buf.get(..read).unwrap_or_default());
+        if !chunk.is_empty() && sender.unbounded_send(chunk).is_err() {
+            return Ok(());
         }
+    }
+
+    let chunk = decoder.finish();
+    if !chunk.is_empty() {
+        _ = sender.unbounded_send(chunk);
     }
 
     Ok(())
@@ -108,5 +168,30 @@ mod tests {
     #[test]
     fn test_parse_hex_overflow() {
         assert_eq!(parse_hex("0x100000000"), None);
+    }
+
+    #[test]
+    fn test_decoder_preserves_utf8_split_across_reads() {
+        let mut decoder = Utf8LossyDecoder::default();
+
+        assert_eq!(decoder.push(&[0xF0, 0x9F]), "");
+        assert_eq!(decoder.push(&[0x98, 0x80]), "😀");
+        assert_eq!(decoder.finish(), "");
+    }
+
+    #[test]
+    fn test_decoder_retains_incomplete_utf8_after_invalid_bytes() {
+        let mut decoder = Utf8LossyDecoder::default();
+
+        assert_eq!(decoder.push(&[0xFF, 0xF0, 0x9F]), "�");
+        assert_eq!(decoder.push(&[0x98, 0x80]), "😀");
+    }
+
+    #[test]
+    fn test_decoder_replaces_incomplete_utf8_at_end_of_stream() {
+        let mut decoder = Utf8LossyDecoder::default();
+
+        assert_eq!(decoder.push(&[0xF0, 0x9F]), "");
+        assert_eq!(decoder.finish(), "�");
     }
 }
