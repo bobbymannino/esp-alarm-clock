@@ -68,3 +68,26 @@ fn forward(mut reader: impl std::io::Read, sender: &mpsc::UnboundedSender<String
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_hex_regex_valid() {
+        let hex = "0x123abc";
+        assert!(is_valid_hex(hex));
+    }
+
+    #[test]
+    fn test_hex_regex_starts_without_0x() {
+        let hex = "123abc";
+        assert!(!is_valid_hex(hex));
+    }
+
+    #[test]
+    fn test_hex_regex_invalid_character() {
+        let hex = "0x1g";
+        assert!(!is_valid_hex(hex));
+    }
+}
