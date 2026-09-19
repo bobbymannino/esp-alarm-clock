@@ -7,6 +7,9 @@ use gpui_kit::{
     *,
 };
 
+/// Maximum amount of child output retained by the UI.
+const MAX_LOG_BYTES: usize = 256 * 1024;
+
 pub struct MainWindow {
     /// Whether a flash read is currently in flight.
     is_reading_flash: bool,
@@ -97,6 +100,7 @@ impl MainWindow {
 
     fn set_logs(&mut self, text: String, window: &mut Window, cx: &mut Context<Self>) {
         self.log_text = text;
+        trim_log(&mut self.log_text);
         self.sync_log_textarea(window, cx);
     }
 
@@ -122,6 +126,7 @@ impl MainWindow {
             self.log_text.push_str(part);
         }
 
+        trim_log(&mut self.log_text);
         self.sync_log_textarea(window, cx);
     }
 
@@ -133,5 +138,42 @@ impl MainWindow {
             let end = state.value().len();
             state.set_selected_range(end..end, cx);
         });
+    }
+}
+
+fn trim_log(log: &mut String) {
+    if log.len() <= MAX_LOG_BYTES {
+        return;
+    }
+
+    let mut start = log.len().saturating_sub(MAX_LOG_BYTES);
+    while !log.is_char_boundary(start) {
+        start = start.saturating_add(1);
+    }
+    log.drain(..start);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MAX_LOG_BYTES, trim_log};
+
+    #[test]
+    fn trim_log_retains_newest_output() {
+        let mut log = format!("old{}", "n".repeat(MAX_LOG_BYTES));
+
+        trim_log(&mut log);
+
+        assert_eq!(log.len(), MAX_LOG_BYTES);
+        assert!(!log.starts_with("old"));
+    }
+
+    #[test]
+    fn trim_log_preserves_utf8_boundaries() {
+        let mut log = format!("😀{}", "n".repeat(MAX_LOG_BYTES.saturating_sub(1)));
+
+        trim_log(&mut log);
+
+        assert!(log.len() <= MAX_LOG_BYTES);
+        assert!(log.chars().all(|character| character == 'n'));
     }
 }
