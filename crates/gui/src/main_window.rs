@@ -36,9 +36,6 @@ impl MainWindow {
             return;
         }
 
-        self.reading_alarms = true;
-        self.log_text.clear();
-
         let flash_address = self.flash_address.read(cx).value().to_string();
         if !flash::is_valid_hex(&flash_address) {
             self.show_validation_error(
@@ -61,6 +58,8 @@ impl MainWindow {
             return;
         }
 
+        self.reading_alarms = true;
+        self.log_text.clear();
         cx.notify();
 
         // The child runs on a background thread, so its output comes back over a
@@ -95,7 +94,6 @@ impl MainWindow {
         self.logs.update(cx, |logs, cx| {
             logs.set_value(message, window, cx);
         });
-        self.reading_alarms = false;
         input.focus_handle(cx).focus(window, cx);
     }
 
