@@ -130,6 +130,8 @@ impl Render for MainWindow {
                     .gap_4()
                     .child(
                         div()
+                            .id("flash-address-input")
+                            .tooltip(|window, cx| Tooltip::new("Start address to read, in hexadecimal").build(window, cx))
                             .flex()
                             .flex_col()
                             .gap_1()
@@ -139,6 +141,8 @@ impl Render for MainWindow {
                     )
                     .child(
                         div()
+                            .id("flash-size-input")
+                            .tooltip(|window, cx| Tooltip::new("Number of bytes to read, in hexadecimal").build(window, cx))
                             .flex()
                             .flex_col()
                             .gap_1()
