@@ -34,7 +34,8 @@ pub(super) fn parse_hex(value: &str) -> Option<u32> {
 ///
 /// Blocking, so this must not be called on the main thread.
 pub(super) fn read(request: FlashRead, sender: &mpsc::UnboundedSender<String>) -> Result<()> {
-    let output_path = std::env::temp_dir().join("nvs.bin");
+    let output_dir = tempfile::Builder::new().prefix("esp-alarm-clock-").tempdir()?;
+    let output_path = output_dir.path().join("nvs.bin");
 
     let mut child = Command::new("espflash")
         .arg("read-flash")

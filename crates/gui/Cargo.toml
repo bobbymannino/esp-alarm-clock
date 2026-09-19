@@ -7,6 +7,7 @@ edition = "2024"
 gpui-kit = "0.6"
 anyhow = "1.0"
 futures = "0.3"
+tempfile = "3.27"
 
 [lints.clippy]
 pedantic = { level = "deny", priority = -1 }
