@@ -46,7 +46,7 @@ impl MainWindow {
         }
     }
 
-    fn read_alarms(&mut self, cx: &mut Context<Self>) {
+    fn read_alarms(&mut self, cx: &mut Context<Self>, window: &mut Window) {
         if self.reading_alarms {
             return;
         }
@@ -54,7 +54,23 @@ impl MainWindow {
         self.reading_alarms = true;
         self.log_text.clear();
         let flash_address = self.flash_address.read(cx).value().to_string();
+        if !regex::regex!(r"^0x[0-9a-f]+").is_match(&flash_address) {
+            self.logs.update(cx, |logs, cx| {
+                logs.set_value("Flash address must start with \"0x\" and be valid hex", window, cx);
+            });
+            self.reading_alarms = false;
+            self.flash_address.focus_handle(cx).focus(window, cx);
+            return;
+        }
         let flash_size = self.flash_size.read(cx).value().to_string();
+        if !regex::regex!(r"^0x[0-9a-f]+").is_match(&flash_size) {
+            self.logs.update(cx, |logs, cx| {
+                logs.set_value("Flash size must start with \"0x\" and be valid hex", window, cx);
+            });
+            self.reading_alarms = false;
+            self.flash_size.focus_handle(cx).focus(window, cx);
+            return;
+        }
         cx.notify();
 
         // The child runs on a background thread, so its output comes back over a
@@ -170,7 +186,7 @@ impl Render for MainWindow {
                             .label("Read Alarms")
                             .icon(IconName::Eye)
                             .loading(self.reading_alarms)
-                            .on_click(cx.listener(|this, _, _, cx| this.read_alarms(cx))),
+                            .on_click(cx.listener(|this, _, window, cx| this.read_alarms(cx, window))),
                     )
                     .child(
                         Button::new("clear_logs")
