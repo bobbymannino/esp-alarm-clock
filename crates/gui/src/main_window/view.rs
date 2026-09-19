@@ -63,7 +63,7 @@ impl Render for MainWindow {
                     )),
             )
             .child(
-                Textarea::new(&self.logs)
+                Textarea::new(self.logs.textarea())
                     .h_96()
                     .border_2()
                     .border_color(theme.border)
