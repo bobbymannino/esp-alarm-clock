@@ -58,6 +58,8 @@ impl MainWindow {
             return;
         };
 
+        let flash_read = flash::FlashRead::new(flash_address, flash_size);
+
         self.is_reading_alarms = true;
         self.log_text.clear();
         cx.notify();
@@ -67,9 +69,7 @@ impl MainWindow {
         let (sender, mut receiver) = mpsc::unbounded();
 
         cx.spawn(async move |this, cx| {
-            let read = cx
-                .background_executor()
-                .spawn(async move { flash::read(flash_address, flash_size, &sender) });
+            let read = cx.background_executor().spawn(async move { flash::read(flash_read, &sender) });
 
             while let Some(chunk) = receiver.next().await {
                 this.update_in(cx, |this, window, cx| this.append_logs(&chunk, window, cx)).ok();

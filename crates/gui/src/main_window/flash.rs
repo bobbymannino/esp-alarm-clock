@@ -10,6 +10,17 @@ use futures::channel::mpsc;
 pub(super) const DEFAULT_ADDRESS: &str = "0x9000";
 pub(super) const DEFAULT_SIZE: &str = "0x6000";
 
+pub(super) struct FlashRead {
+    address: u32,
+    size: u32,
+}
+
+impl FlashRead {
+    pub(super) const fn new(address: u32, size: u32) -> Self {
+        Self { address, size }
+    }
+}
+
 /// How many bytes are read from the child's pipes at a time.
 const CHUNK_SIZE: usize = 1024;
 
@@ -22,13 +33,13 @@ pub(super) fn parse_hex(value: &str) -> Option<u32> {
 /// it is produced.
 ///
 /// Blocking, so this must not be called on the main thread.
-pub(super) fn read(flash_address: u32, flash_size: u32, sender: &mpsc::UnboundedSender<String>) -> Result<()> {
+pub(super) fn read(request: FlashRead, sender: &mpsc::UnboundedSender<String>) -> Result<()> {
     let output_path = std::env::temp_dir().join("nvs.bin");
 
     let mut child = Command::new("espflash")
         .arg("read-flash")
-        .arg(format!("{flash_address:#x}"))
-        .arg(format!("{flash_size:#x}"))
+        .arg(format!("{:#x}", request.address))
+        .arg(format!("{:#x}", request.size))
         .arg(output_path)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
