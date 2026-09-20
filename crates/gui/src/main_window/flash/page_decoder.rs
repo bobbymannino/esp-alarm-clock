@@ -2,6 +2,11 @@ use std::path::Path;
 
 use anyhow::Result;
 
+const PAGE_SIZE: usize = 4096;
+const ENTRY_SIZE: usize = 32;
+const ENTRIES_PER_PAGE: usize = 126;
+const ENTRY_TABLE_OFFSET: usize = 64;
+
 #[derive(Debug)]
 pub struct Entry {
     ns: u8,
@@ -26,7 +31,7 @@ pub struct PageHeader {
 #[derive(Debug)]
 pub struct Page {
     header: PageHeader,
-    // entries: [Entry; 126],
+    // entries: [Entry; ENTRIES_PER_PAGE],
 }
 
 impl From<&[u8]> for Page {
@@ -43,9 +48,6 @@ impl From<&[u8]> for Page {
 }
 
 pub(super) fn decode_flash(nvs_path: &Path) -> Result<()> {
-    /// Page size in bytes
-    const PAGE_SIZE: usize = 4096;
-
     let nvs_data = std::fs::read(nvs_path)?;
     println!("nvs_data byte count: {}", nvs_data.len());
 
