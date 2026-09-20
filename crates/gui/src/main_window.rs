@@ -1,0 +1,122 @@
+mod flash;
+mod logs;
+mod view;
+
+use std::time::Duration;
+
+use futures::{FutureExt as _, StreamExt as _, channel::mpsc};
+use gpui_kit::{component::input::InputState, *};
+use logs::Logs;
+
+/// How long child output is collected before updating the log textarea.
+const LOG_BATCH_INTERVAL: Duration = Duration::from_millis(16);
+/// Maximum number of child-output chunks waiting for the UI.
+const LOG_CHANNEL_CAPACITY: usize = 32;
+
+pub struct MainWindow {
+    /// Whether a flash read is currently in flight.
+    is_reading_flash: bool,
+    /// The flash address passed to `espflash read-flash`.
+    flash_address: Entity<InputState>,
+    /// The number of bytes passed to `espflash read-flash`.
+    flash_size: Entity<InputState>,
+    /// Child-process output displayed in the log textarea.
+    logs: Logs,
+}
+
+impl MainWindow {
+    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        Self {
+            is_reading_flash: false,
+            flash_address: cx.new(|cx| InputState::new(window, cx).default_value(flash::DEFAULT_ADDRESS)),
+            flash_size: cx.new(|cx| InputState::new(window, cx).default_value(flash::DEFAULT_SIZE)),
+            logs: Logs::new(window, cx),
+        }
+    }
+
+    fn read_alarms(&mut self, cx: &mut Context<Self>, window: &mut Window) {
+        if self.is_reading_flash {
+            return;
+        }
+
+        let flash_address = self.flash_address.read(cx).value().to_string();
+        let Some(flash_address) = flash::parse_hex(&flash_address) else {
+            self.show_validation_error(
+                "Flash address must start with \"0x\" and fit in 32-bit hex",
+                &self.flash_address.clone(),
+                window,
+                cx,
+            );
+            return;
+        };
+
+        let flash_size = self.flash_size.read(cx).value().to_string();
+        let Some(flash_size) = flash::parse_hex(&flash_size) else {
+            self.show_validation_error(
+                "Flash size must start with \"0x\" and fit in 32-bit hex",
+                &self.flash_size.clone(),
+                window,
+                cx,
+            );
+            return;
+        };
+
+        let flash_read = flash::FlashRead::new(flash_address, flash_size);
+
+        self.is_reading_flash = true;
+        self.clear_logs(window, cx);
+        cx.notify();
+
+        // Bound queued output so slow UI updates apply backpressure to the pipe
+        // readers instead of allowing child output to consume unlimited memory.
+        let (sender, mut receiver) = mpsc::channel(LOG_CHANNEL_CAPACITY);
+
+        cx.spawn(async move |this, cx| {
+            let read = cx.background_executor().spawn(async move { flash::read(flash_read, sender) });
+
+            while let Some(mut batch) = receiver.next().await {
+                cx.background_executor().timer(LOG_BATCH_INTERVAL).await;
+
+                let mut channel_open = true;
+                loop {
+                    match receiver.next().now_or_never() {
+                        Some(Some(chunk)) => batch.push_str(&chunk),
+                        Some(None) => {
+                            channel_open = false;
+                            break;
+                        }
+                        None => break,
+                    }
+                }
+
+                this.update_in(cx, |this, window, cx| this.logs.append(&batch, window, cx)).ok();
+
+                if !channel_open {
+                    break;
+                }
+            }
+
+            let result = read.await;
+
+            this.update_in(cx, |this, window, cx| {
+                if let Err(error) = result {
+                    this.logs.append(&format!("\n{error:#}\n"), window, cx);
+                }
+
+                this.is_reading_flash = false;
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn show_validation_error(&mut self, message: &str, input: &Entity<InputState>, window: &mut Window, cx: &mut Context<Self>) {
+        self.logs.set(message.to_owned(), window, cx);
+        input.focus_handle(cx).focus(window, cx);
+    }
+
+    fn clear_logs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.logs.clear(window, cx);
+    }
+}

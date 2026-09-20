@@ -16,4 +16,5 @@ CHRONO_TZ_TIMEZONE_FILTER = "Europe/London"
 ESP_IDF_VERSION = "v5.5.4"
 
 [alias]
-t = "test -p alarm-core --target aarch64-apple-darwin"
+t = "test -p alarm-core -p gui --target aarch64-apple-darwin"
+g = "run -p gui --target aarch64-apple-darwin --config unstable.build-std=[]"

@@ -1,0 +1,94 @@
+use gpui_kit::{
+    assets::IconName,
+    base::Disableable,
+    component::{
+        ActiveTheme as _,
+        button::{Button, ButtonVariants},
+        input::{Input, InputState, Textarea},
+        label::Label,
+        scroll::ScrollableElement,
+        tooltip::Tooltip,
+    },
+    *,
+};
+
+use super::MainWindow;
+
+fn flash_input(
+    id: &'static str,
+    tooltip: &'static str,
+    label: &'static str,
+    input: &Entity<InputState>,
+    disabled: bool,
+) -> impl IntoElement {
+    div()
+        .id(id)
+        .tooltip(move |window, cx| Tooltip::new(tooltip).build(window, cx))
+        .flex()
+        .flex_col()
+        .gap_1()
+        .w_48()
+        .child(Label::new(label))
+        .child(Input::new(input).disabled(disabled))
+}
+
+impl Render for MainWindow {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = cx.theme();
+
+        div()
+            .overflow_y_scrollbar()
+            .flex()
+            .flex_col()
+            .p_5()
+            .gap_5()
+            .child(Label::new("ESP Alarm Clock").font_weight(FontWeight::BOLD).text_3xl())
+            .child(
+                div()
+                    .flex()
+                    .gap_4()
+                    .child(flash_input(
+                        "flash-address-input",
+                        "Start address to read, in hexadecimal",
+                        "Flash address",
+                        &self.flash_address,
+                        self.is_reading_flash,
+                    ))
+                    .child(flash_input(
+                        "flash-size-input",
+                        "Number of bytes to read, in hexadecimal",
+                        "Flash size",
+                        &self.flash_size,
+                        self.is_reading_flash,
+                    )),
+            )
+            .child(
+                Textarea::new(self.logs.textarea())
+                    .h_96()
+                    .border_2()
+                    .border_color(theme.border)
+                    .rounded_lg()
+                    .readonly(true),
+            )
+            .child(
+                div()
+                    .flex()
+                    .gap_2()
+                    .child(Button::new("close").label("Close").on_click(|_, window, _| window.remove_window()))
+                    .child(
+                        Button::new("read_alarms")
+                            .primary()
+                            .label("Read Alarms")
+                            .icon(IconName::Eye)
+                            .loading(self.is_reading_flash)
+                            .on_click(cx.listener(|this, _, window, cx| this.read_alarms(cx, window))),
+                    )
+                    .child(
+                        Button::new("clear_logs")
+                            .label("Clear Logs")
+                            .disabled(self.is_reading_flash)
+                            .on_click(cx.listener(|this, _, window, cx| this.clear_logs(window, cx))),
+                    ),
+            )
+    }
+}

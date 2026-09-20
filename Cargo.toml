@@ -20,13 +20,16 @@ strip = true
 
 [workspace]
 members = ["crates/alarm-core"]
+exclude = ["crates/gui"]
 
 [dependencies]
 alarm-core = { path = "crates/alarm-core" }
 chrono = { version = "0.4", default-features = false }
 log = "0.4"
 esp-idf-svc = "0.53"
-chrono-tz = { version = "0.10.4", default-features = false, features = ["filter-by-regex"] }
+chrono-tz = { version = "0.10.4", default-features = false, features = [
+    "filter-by-regex",
+] }
 
 [build-dependencies]
 embuild = "0.33"
