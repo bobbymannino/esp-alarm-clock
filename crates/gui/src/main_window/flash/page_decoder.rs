@@ -28,7 +28,7 @@ const TYPE_BLOB_IDX: u8 = 0x48;
 
 /// The decoded payload of an entry, resolved from its type byte.
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum EntryValue {
+pub enum EntryValue {
     U8(u8),
     I8(i8),
     U16(u16),
@@ -40,8 +40,15 @@ enum EntryValue {
     Str(String),
     Blob(Vec<u8>),
     /// The index entry that describes how many `Blob` chunks make up one blob.
-    BlobIndex { size: u32, chunk_count: u8, chunk_start: u8 },
-    Unknown { typ: u8, data: [u8; DATA_SIZE] },
+    BlobIndex {
+        size: u32,
+        chunk_count: u8,
+        chunk_start: u8,
+    },
+    Unknown {
+        typ: u8,
+        data: [u8; DATA_SIZE],
+    },
 }
 
 impl fmt::Display for EntryValue {
@@ -78,7 +85,7 @@ struct RawEntry {
     data: [u8; DATA_SIZE],
 }
 
-struct PageEntry {
+pub struct PageEntry {
     ns: u8,
     span: u8,
     chunk_index: u8,
@@ -87,7 +94,17 @@ struct PageEntry {
     value: EntryValue,
 }
 
-struct PageHeader {
+impl PageEntry {
+    pub fn key(&self) -> &str {
+        &self.key
+    }
+
+    pub fn value(&self) -> &EntryValue {
+        &self.value
+    }
+}
+
+pub struct PageHeader {
     state: u32,
     sequence: u32,
     /// This is reversed so `0xFF` is version 1, `0xFE` is version 2, etc.
@@ -95,9 +112,15 @@ struct PageHeader {
     crc32: u32,
 }
 
-struct Page {
+pub struct Page {
     header: PageHeader,
     entries: Vec<PageEntry>,
+}
+
+impl Page {
+    pub fn entries(&self) -> &Vec<PageEntry> {
+        &self.entries
+    }
 }
 
 impl TryFrom<&[u8]> for RawEntry {
@@ -131,7 +154,8 @@ impl TryFrom<&[u8]> for RawEntry {
 impl PageEntry {
     /// `payload` holds the bytes of the entries this one spans, which is empty for fixed-size types.
     fn from_raw(raw: RawEntry, payload: &[u8]) -> Result<Self> {
-        let value = decode_value(raw.typ, raw.data, payload).with_context(|| format!("failed to decode the value of NVS key {:?}", raw.key))?;
+        let value =
+            decode_value(raw.typ, raw.data, payload).with_context(|| format!("failed to decode the value of NVS key {:?}", raw.key))?;
 
         Ok(Self {
             ns: raw.ns,
@@ -263,7 +287,7 @@ fn entry_is_written(states: &[u8], index: usize) -> Result<bool> {
     Ok((state_byte >> shift) & 0b11 == WRITTEN)
 }
 
-pub(super) fn decode_flash(nvs_path: &Path) -> Result<()> {
+pub(super) fn decode_flash(nvs_path: &Path) -> Result<Vec<Page>> {
     let nvs_data = std::fs::read(nvs_path).with_context(|| format!("failed to read NVS data from {}", nvs_path.display()))?;
     let (page_chunks, remainder) = nvs_data.as_chunks::<PAGE_SIZE>();
     if !remainder.is_empty() {
@@ -276,22 +300,12 @@ pub(super) fn decode_flash(nvs_path: &Path) -> Result<()> {
     println!("nvs_data byte count: {}", nvs_data.len());
     println!("page count: {}", page_chunks.len());
 
-    for (index, bytes) in page_chunks.iter().enumerate() {
-        let page = Page::try_from(bytes.as_slice()).with_context(|| format!("failed to decode NVS page {index}"))?;
-        println!("{index}.");
-        println!(
-            "  state={:#010X}, sequence={}, version={:#04X}, crc32={:#010X}",
-            page.header.state, page.header.sequence, page.header.version, page.header.crc32
-        );
-        for entry in &page.entries {
-            println!(
-                "  ns={}, span={}, chunk={}, crc32={:#010X}, key={:?}, value={}",
-                entry.ns, entry.span, entry.chunk_index, entry.crc32, entry.key, entry.value
-            );
-        }
-    }
+    let pages = page_chunks
+        .iter()
+        .filter_map(|chunk| Page::try_from(chunk.as_slice()).ok())
+        .collect();
 
-    Ok(())
+    Ok(pages)
 }
 
 #[cfg(test)]
@@ -323,7 +337,9 @@ mod tests {
         for (index, bytes) in entries.iter().enumerate() {
             // Clear the low bit of the entry's state, turning the erased `0b11` into written `0b10`.
             let state_index = HEADER_SIZE.checked_add(index / 4).context("test page bitmap index overflowed")?;
-            let shift = u32::try_from(index % 4)?.checked_mul(2).context("test page bitmap shift overflowed")?;
+            let shift = u32::try_from(index % 4)?
+                .checked_mul(2)
+                .context("test page bitmap shift overflowed")?;
             let mask = 0b01_u8.checked_shl(shift).context("test page bitmap shift is invalid")?;
             *page.get_mut(state_index).context("test page bitmap is missing")? &= !mask;
             let offset = index

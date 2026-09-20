@@ -6,8 +6,11 @@ use std::{
     thread,
 };
 
+use alarm_core::Alarm;
 use anyhow::{Result, anyhow, bail};
 use futures::{SinkExt as _, channel::mpsc, executor::block_on};
+
+use crate::main_window::flash::page_decoder::{EntryValue, PageEntry};
 
 pub(super) const DEFAULT_ADDRESS: &str = "0x9000";
 pub(super) const DEFAULT_SIZE: &str = "0x6000";
@@ -66,7 +69,18 @@ pub(super) fn read(request: FlashRead, mut sender: mpsc::Sender<String>) -> Resu
         bail!("espflash exited with {status}");
     }
 
-    page_decoder::decode_flash(output_path.as_path())?;
+    let pages = page_decoder::decode_flash(output_path.as_path())?;
+    for page in &pages {
+        for entry in page.entries().iter().filter(|entry| entry.key().eq("alarms")) {
+            let EntryValue::Blob(blob) = entry.value() else {
+                continue;
+            };
+            blob.chunks_exact(2).for_each(|chunk| {
+                let alarm = Alarm::from_bytes([&chunk[0], &chunk[1]]);
+                println!("{:?}", alarm);
+            });
+        }
+    }
 
     Ok(())
 }
