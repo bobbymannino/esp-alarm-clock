@@ -1,3 +1,5 @@
+mod page_decoder;
+
 use std::{
     io::{self, Read},
     process::{Command, Stdio},
@@ -41,7 +43,7 @@ pub(super) fn read(request: FlashRead, mut sender: mpsc::Sender<String>) -> Resu
         .arg("read-flash")
         .arg(format!("{:#x}", request.address))
         .arg(format!("{:#x}", request.size))
-        .arg(output_path)
+        .arg(&output_path)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()?;
@@ -63,6 +65,8 @@ pub(super) fn read(request: FlashRead, mut sender: mpsc::Sender<String>) -> Resu
     if !status.success() {
         bail!("espflash exited with {status}");
     }
+
+    page_decoder::decode_flash(output_path.as_path())?;
 
     Ok(())
 }
