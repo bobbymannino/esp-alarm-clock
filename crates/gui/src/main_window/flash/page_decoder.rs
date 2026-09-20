@@ -8,7 +8,7 @@ const ENTRIES_PER_PAGE: usize = 126;
 const ENTRY_TABLE_OFFSET: usize = 64;
 
 #[derive(Debug)]
-pub struct Entry {
+pub struct PageEntry {
     ns: u8,
     typ: u8,
     span: u8,
@@ -31,19 +31,40 @@ pub struct PageHeader {
 #[derive(Debug)]
 pub struct Page {
     header: PageHeader,
-    // entries: [Entry; ENTRIES_PER_PAGE],
+    entries: [PageEntry; ENTRIES_PER_PAGE],
 }
 
-impl From<&[u8]> for Page {
+impl From<&[u8]> for PageEntry {
     fn from(value: &[u8]) -> Self {
+        Self {
+            ns: value[0],
+            typ: value[1],
+            span: value[2],
+            chunk_index: value[3],
+            crc32: u32::from_le_bytes([value[4], value[5], value[6], value[7]]),
+            key: String::from_utf8_lossy(&value[8..23]).to_string(),
+            data: value[24..].try_into().expect("Page entry data is invalid length"),
+        }
+    }
+}
+
+impl TryFrom<&[u8]> for Page {
+    type Error = anyhow::Error;
+
+    fn try_from(value: &[u8]) -> std::prelude::v1::Result<Self, Self::Error> {
         let header = PageHeader {
-            state: value[0..3].into(),
-            sequence: 0,
+            state: u32::from_le_bytes([value[0], value[1], value[2], value[3]]),
+            sequence: u32::from_le_bytes([value[4], value[5], value[6], value[7]]),
             version: value[8],
-            crc32: 0,
+            crc32: u32::from_le_bytes([value[9], value[10], value[11], value[12]]),
         };
 
-        Page { header }
+        let entries: Vec<PageEntry> = value[ENTRY_TABLE_OFFSET..].chunks_exact(ENTRY_SIZE).map(PageEntry::from).collect();
+        let Ok(entries) = entries.try_into() else {
+            anyhow::bail!("Failed to convert pages");
+        };
+
+        Ok(Page { header, entries })
     }
 }
 
@@ -51,12 +72,18 @@ pub(super) fn decode_flash(nvs_path: &Path) -> Result<()> {
     let nvs_data = std::fs::read(nvs_path)?;
     println!("nvs_data byte count: {}", nvs_data.len());
 
-    let pages = nvs_data.chunks_exact(PAGE_SIZE).map(Page::from);
+    let pages = nvs_data
+        .chunks_exact(PAGE_SIZE)
+        .filter_map(|chunk| Page::try_from(chunk).ok())
+        .collect::<Vec<_>>();
     println!("page count: {}", pages.len());
 
-    for (index, page) in pages.enumerate() {
+    for (index, page) in pages.iter().enumerate() {
         println!("{index}.");
         println!("  {:?}", page.header);
+        for entry in page.entries.iter().filter(|entry| entry.data.iter().any(|b| !b.eq(&0))) {
+            println!("  {:?}", entry);
+        }
     }
 
     Ok(())
