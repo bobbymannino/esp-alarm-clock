@@ -1,5 +1,10 @@
 # ESP Alarm Clock
 
+> [!NOTE]
+> This project is no longer maintained, there will be no updates or changes to
+> it. This was just a small project for me to learn new things relating to ESPs
+> and hardware programming in Rust.
+
 A simple alarm clock written in Rust using an ESP32.
 
 ## Usage
