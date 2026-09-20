@@ -159,15 +159,48 @@ pub(super) fn decode_flash(nvs_path: &Path) -> Result<()> {
 mod tests {
     use super::*;
 
+    fn page_with_first_entry(entry: &[u8; ENTRY_SIZE]) -> Result<[u8; PAGE_SIZE]> {
+        let mut page = [0xFF; PAGE_SIZE];
+        page.get_mut(28..32)
+            .context("test page CRC range is invalid")?
+            .copy_from_slice(&0x1234_5678_u32.to_le_bytes());
+        *page.get_mut(HEADER_SIZE).context("test page bitmap is missing")? = 0b1111_1110;
+        page.get_mut(ENTRY_TABLE_OFFSET..ENTRY_TABLE_OFFSET + ENTRY_SIZE)
+            .context("test page entry range is invalid")?
+            .copy_from_slice(entry);
+        Ok(page)
+    }
+
     #[test]
-    fn test_decoding_pages() {
-        const PATH: &str = "../../nvs.bin";
+    fn decodes_full_key_and_page_crc() -> Result<()> {
+        let mut entry = [0_u8; ENTRY_SIZE];
+        entry
+            .get_mut(8..24)
+            .context("test entry key range is invalid")?
+            .copy_from_slice(b"sixteen-byte-key");
+        let page = Page::try_from(page_with_first_entry(&entry)?.as_slice())?;
 
-        let path = Path::new(PATH);
-        if !path.exists() {
-            panic!("Path {PATH} does not exist");
-        }
+        anyhow::ensure!(page.header.crc32 == 0x1234_5678, "decoded the wrong page CRC");
+        anyhow::ensure!(page.entries.len() == 1, "decoded the wrong number of entries");
+        anyhow::ensure!(
+            page.entries.first().context("decoded page has no entries")?.key == "sixteen-byte-key",
+            "decoded the wrong entry key"
+        );
+        Ok(())
+    }
 
-        _ = decode_flash(path).expect(format!("Failed to decode {PATH}").as_str());
+    #[test]
+    fn ignores_entries_not_marked_written() -> Result<()> {
+        let page = Page::try_from([0xFF; PAGE_SIZE].as_slice())?;
+
+        anyhow::ensure!(page.entries.is_empty(), "decoded an unwritten entry");
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_incorrect_page_size() {
+        let result = Page::try_from([0_u8; PAGE_SIZE - 1].as_slice());
+
+        assert!(result.is_err_and(|error| error.to_string().contains("must be 4096 bytes")));
     }
 }
